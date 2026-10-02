@@ -7,9 +7,12 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+from coletor.config import FUSO
+
 
 def log(msg: str) -> None:
-    print(f"[{datetime.now():%H:%M:%S}] {msg}", flush=True)
+    # Horário de Brasília também no runner do GitHub, que roda em UTC.
+    print(f"[{datetime.now(FUSO):%H:%M:%S}] {msg}", flush=True)
 
 
 def ler_csv(caminho: Path) -> list[dict]:
