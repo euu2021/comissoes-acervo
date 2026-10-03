@@ -8,6 +8,8 @@ O SPLEGIS mostra só o retrato do momento. Este repositório tira um retrato por
 
 **Situação:** coleta diária automática desde 02/10/2026, mais uma reconstrução do acervo de novembro de 2018 até essa data.
 
+**Autoria:** criado e mantido por [André Marcon](mailto:andremarcon@saopaulo.sp.leg.br) e Kauê.
+
 ## Como funciona
 
 - **Fonte:** o relatório público [Projetos em Análise nas Comissões](https://splegisconsulta.saopaulo.sp.leg.br/Relatorio/IndexComissaoProjetoTramitacaoInterna) do SPLEGIS. O coletor lê o endpoint JSON que alimenta a tabela do relatório, com todos os tipos de matéria.
