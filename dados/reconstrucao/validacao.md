@@ -1,7 +1,7 @@
 # Validação da reconstrução
 
-- Eventos de 2018-10-26 a 2026-10-02; série de 2018-11-01 a 2026-10-02; retrato-âncora de 2026-10-02T19:36:19.
-- Eventos do feed: 427.288 (interna 204.950. envio 106.944. receb 99.387. outro 10.400. excl_envio 2.908. excl_interna 1.955. excl_receb 744).
+- Eventos de 2018-10-26 a 2026-10-02; série de 2018-11-01 a 2026-10-02; retrato-âncora de 2026-10-03T02:48:17.
+- Eventos do feed: 427.296 (interna 204.958. envio 106.944. receb 99.387. outro 10.400. excl_envio 2.908. excl_interna 1.955. excl_receb 744).
 - Matérias que passaram por comissões: 11.589; presenças: 25.364.
 - Correções na fonte: {'recebimento suspeito confirmado': 1984, 'recebimento suspeito não resolvido (mantido)': 123, 'recebimento suspeito sem id': 2, 'recebimento suspeito sem histórico': 98, 'recebimento com dia/mês trocados (movido)': 51, 'excl_receb desconsiderada': 155, 'excl_envio desconsiderada': 16}.
 - Incoerências na sequência de eventos externos (quase todas fora das comissões): {'recebida': 509, 'recebimento': 41, 'enviada': 899, 'envio': 399, 'retrato': 1}.
@@ -16,7 +16,7 @@
 
 ## B. Coerência: tramitação interna acontece durante uma presença na comissão
 
-- Total: 204.353/204.539 (99.91%)
+- Total: 204.361/204.547 (99.91%)
   - 2018: 6.368/6.400 (99.50%)
   - 2019: 35.425/35.465 (99.89%)
   - 2020: 12.562/12.606 (99.65%)
@@ -25,7 +25,7 @@
   - 2023: 24.414/24.434 (99.92%)
   - 2024: 22.076/22.079 (99.99%)
   - 2025: 36.994/37.005 (99.97%)
-  - 2026: 20.412/20.420 (99.96%)
+  - 2026: 20.420/20.428 (99.96%)
 
 ## C. Presença × histórico oficial (500 matérias sorteadas, 414 dias, de 7 em 7)
 

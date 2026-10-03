@@ -16,6 +16,7 @@ from datetime import date, timedelta
 from reconstrucao import fontes
 from reconstrucao.eventos import COMISSOES, Evento
 from reconstrucao.linha_do_tempo import DESCONHECIDO, Presenca
+from reconstrucao.serie import TODAS
 
 
 def estado_final(presencas: dict[str, list[Presenca]], ancoras: dict[str, dict],
@@ -134,7 +135,7 @@ def saltos(serie: list[dict], quantos: int = 12) -> list[tuple]:
     """Maiores variações de um dia para o outro no total de matérias de cada comissão."""
     por_comissao: dict[str, list] = defaultdict(list)
     for linha in serie:
-        if linha["grupo"] == "todas":
+        if linha["grupo"] == "todas" and linha["comissao"] != TODAS:
             por_comissao[linha["comissao"]].append((linha["data"], int(linha["materias"])))
     variacoes = []
     for comissao, pontos in por_comissao.items():

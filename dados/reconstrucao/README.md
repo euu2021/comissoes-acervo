@@ -1,6 +1,6 @@
 # Acervo reconstruído (nov/2018 a out/2026)
 
-O acervo das 7 Comissões Permanentes dia a dia, de 01/11/2018 até o início da coleta diária deste repositório. Ele foi reconstruído a partir dos eventos de tramitação que o SPLEGIS publica para cada dia (serviço `MateriasEventosJSON`, completo a partir de 26/10/2018) e ancorado no primeiro retrato real, de 02/10/2026. A partir dessa data, valem os retratos reais em [`dados/`](../).
+O acervo das 7 Comissões Permanentes dia a dia, de 01/11/2018 até o início da coleta diária deste repositório. Ele foi reconstruído a partir dos eventos de tramitação que o SPLEGIS publica para cada dia (serviço `MateriasEventosJSON`, completo a partir de 26/10/2018) e ancorado no retrato da primeira coleta real, de 02/10/2026 (refeito a partir de `dados/historico.csv`, para que novas coletas não mudem a reconstrução). A partir dessa data, valem os retratos reais em [`dados/`](../).
 
 É uma reconstrução, com três diferenças em relação aos retratos reais:
 
@@ -35,7 +35,7 @@ Datas no formato ISO 8601 (`2019-03-14T10:42:00`), no horário de Brasília.
 
 | Coluna | Descrição |
 |---|---|
-| `data`, `comissao` | Dia e sigla da comissão. |
+| `data`, `comissao` | Dia e sigla da comissão. `TODAS` soma as 7; a mediana dela é a de todas as matérias juntas. |
 | `grupo` | `todas` as matérias ou só `projetos` (PL, PDL, PR e PLO). |
 | `materias` | Tamanho do acervo no fim do dia. |
 | `pendentes` | Matérias enviadas à comissão e ainda não recebidas. |

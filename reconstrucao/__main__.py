@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 Reconstrução retroativa do acervo das Comissões a partir do feed de eventos do SPLEGIS,
-ancorada no retrato real mais recente de dados/acervo.csv.
+ancorada no primeiro retrato real (o da primeira coleta, refeito a partir de
+dados/historico.csv). Assim a reconstrução termina onde a série real começa e não muda
+quando novas coletas chegam.
 
 O feed só fica completo a partir de 26/10/2018 (antes disso há eventos esparsos).
 
@@ -43,16 +45,25 @@ def _chave(rotulo: str) -> tuple:
     return sigla, int(ano), int(numero)
 
 
-def gerar(inicio: date, serie_desde: date, amostra: int) -> int:
-    acervo = ler_csv(C.ARQ_ACERVO)
+def _primeiro_retrato() -> tuple[str, str, list[dict]]:
+    """(dia, instante da coleta, linhas do acervo) da primeira coleta real."""
     coletas = ler_csv(C.ARQ_COLETAS)
-    t_ancora = max(c["coletado_em"] for c in coletas)[:19]
-    fim = date.fromisoformat(t_ancora[:10])
-    inicio_feed = f"{inicio}T00:00:00"
-    log(f"Retrato-âncora: {t_ancora}; eventos a partir de {inicio}")
+    dia = min(c["data"] for c in coletas)
+    instante = next(c["coletado_em"] for c in coletas if c["data"] == dia)[:19]
+    acervo = [h for h in ler_csv(C.ARQ_HISTORICO)
+              if h["desde"] <= dia and (not h["ate"] or dia <= h["ate"])]
+    return dia, instante, acervo
 
-    fontes.baixar_eventos(inicio, fim)
-    eventos, fichas = E.carregar(inicio, fim, t_ancora)
+
+def gerar(inicio: date, serie_desde: date, amostra: int) -> int:
+    dia_ancora, t_ancora, acervo = _primeiro_retrato()
+    fim = date.fromisoformat(dia_ancora)
+    inicio_feed = f"{inicio}T00:00:00"
+    log(f"Retrato-âncora: {dia_ancora} (coletado em {t_ancora}); eventos a partir de {inicio}")
+
+    fim_eventos = date.fromisoformat(t_ancora[:10])  # a coleta pode ter sido na madrugada seguinte
+    fontes.baixar_eventos(inicio, fim_eventos)
+    eventos, fichas = E.carregar(inicio, fim_eventos, t_ancora)
     log(f"{len(eventos)} eventos: {dict(Counter(e.tipo for e in eventos))}")
 
     catalogo_real = {m["rotulo"]: m for m in ler_csv(C.ARQ_MATERIAS)}
@@ -153,7 +164,7 @@ def _relatorio(t_ancora, inicio, serie_desde, fim, eventos, correcoes_cont, corr
     tipos = Counter(e.tipo for e in eventos)
     desconhecidas = Counter()
     for linha in serie:
-        if linha["grupo"] == "todas":
+        if linha["grupo"] == "todas" and linha["comissao"] != S.TODAS:
             ano = linha["data"][:4]
             desconhecidas[(ano, "materias")] += int(linha["materias"])
             desconhecidas[(ano, "idade")] += int(linha["idade_desconhecida"])
