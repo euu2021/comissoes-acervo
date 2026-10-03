@@ -292,20 +292,33 @@ function descrever(svg, texto) {
 }
 
 // ----------------------------------------------------------------------------- tabela e CSV
+// Botões repetidos em todos os cartões (tabela, CSV, imagem): discretos, no rodapé do cartão,
+// com ícone, para não se confundirem com os controles próprios de cada gráfico.
+const ICONES_ACAO = {
+  tabela: '<rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6.5h12M2 9.75h12M6.5 6.5V13"/>',
+  grafico: '<path d="M2.5 13.5h11M4.5 11V8.5M8 11V4.5M11.5 11V7"/>',
+  baixar: '<path d="M8 2.5v8M4.8 7.6 8 10.8l3.2-3.2M3 13.5h10"/>',
+};
+function botaoAcao(texto, icone) {
+  const b = el("button", "botao acao");
+  b.type = "button";
+  b.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${ICONES_ACAO[icone]}</svg>`;
+  b.append(texto);
+  return b;
+}
+
 function acoes(cartao, datas, colunas, arquivo) {
   const caixa = cartao.querySelector(".acoes");
   if (!caixa) return;
   const grafico = cartao.querySelector(".grafico");
   const aberta = cartao.dataset.tabela === "1";
-  const botaoTabela = el("button", "botao", aberta ? "Ver gráfico" : "Ver tabela");
-  botaoTabela.type = "button";
+  const botaoTabela = botaoAcao(aberta ? "Ver gráfico" : "Ver tabela", aberta ? "grafico" : "tabela");
   botaoTabela.setAttribute("aria-pressed", String(aberta));
   botaoTabela.addEventListener("click", () => {
     cartao.dataset.tabela = aberta ? "" : "1";
     render();
   });
-  const botaoCsv = el("button", "botao", "Baixar CSV");
-  botaoCsv.type = "button";
+  const botaoCsv = botaoAcao("Baixar CSV", "baixar");
   botaoCsv.addEventListener("click", () => baixarCsv(datas, colunas, arquivo));
   caixa.replaceChildren(botaoTabela, botaoCsv, ...(aberta ? [] : [botaoImagem(cartao)]));
 
@@ -421,8 +434,7 @@ async function baixarImagem(cartao, arquivo) {
 }
 
 function botaoImagem(cartao) {
-  const b = el("button", "botao", "Baixar imagem");
-  b.type = "button";
+  const b = botaoAcao("Baixar imagem", "baixar");
   b.addEventListener("click", () => baixarImagem(cartao, `${cartao.id.replace(/^c-/, "")}-${estado.comissao.toLowerCase()}.png`));
   return b;
 }
@@ -452,15 +464,13 @@ function acoesTabela(cartao, colunas, linhas, arquivo, { recentesPrimeiro = true
   const caixa = cartao.querySelector(".acoes");
   const grafico = cartao.querySelector(".grafico");
   const aberta = cartao.dataset.tabela === "1";
-  const botaoTabela = el("button", "botao", aberta ? "Ver gráfico" : "Ver tabela");
-  botaoTabela.type = "button";
+  const botaoTabela = botaoAcao(aberta ? "Ver gráfico" : "Ver tabela", aberta ? "grafico" : "tabela");
   botaoTabela.setAttribute("aria-pressed", String(aberta));
   botaoTabela.addEventListener("click", () => {
     cartao.dataset.tabela = aberta ? "" : "1";
     render();
   });
-  const botaoCsv = el("button", "botao", "Baixar CSV");
-  botaoCsv.type = "button";
+  const botaoCsv = botaoAcao("Baixar CSV", "baixar");
   botaoCsv.addEventListener("click", () => baixarTabela(colunas.map((c) => c.nome), linhas, arquivo));
   caixa.replaceChildren(botaoTabela, botaoCsv, ...(aberta ? [] : [botaoImagem(cartao)]));
 
@@ -1429,8 +1439,7 @@ function renderRotas(f) {
   const caixa = cartao.querySelector(".matriz-caixa");
   caixa.replaceChildren(tabela);
 
-  const botaoCsv = el("button", "botao", "Baixar CSV");
-  botaoCsv.type = "button";
+  const botaoCsv = botaoAcao("Baixar CSV", "baixar");
   botaoCsv.addEventListener("click", () => baixarTabela(["de", ...colunas.map((col) => col.titulo), "saídas"],
     ORDEM_COMISSOES.map((s) => [s, ...colunas.map((col) => contagem.get(s).get(col.chave)), totais.get(s)]),
     `rotas-${estado.grupo}-${estado.periodo}.csv`));
@@ -1821,8 +1830,7 @@ function preencherRanking(cartao, itens, opcoes) {
   mais.hidden = itens.length <= PRIMEIRAS_RELATORES;
   mais.textContent = todos ? "Mostrar menos" : `Mostrar ${limite < itens.length ? `os ${fmt(limite)} primeiros` : `todos (${fmt(itens.length)})`}`;
   mais.onclick = () => { cartao.dataset.todos = todos ? "" : "1"; opcoes.redesenhar(); };
-  const botao = el("button", "botao", "Baixar CSV");
-  botao.type = "button";
+  const botao = botaoAcao("Baixar CSV", "baixar");
   botao.addEventListener("click", () => baixarTabela(opcoes.cabecalho, itens.map(opcoes.linhaCsv), opcoes.arquivo));
   cartao.querySelector(".acoes-csv").replaceChildren(botao);
 }
@@ -2229,8 +2237,7 @@ function renderFunil(l) {
     li.title = `${ETAPAS_FUNIL[etapa]}: ${fmt(n[k])} projetos, ${porcentoInteiro(n[k] / (n[0] || 1))} dos apresentados`;
     return li;
   }));
-  const botao = el("button", "botao", "Baixar CSV");
-  botao.type = "button";
+  const botao = botaoAcao("Baixar CSV", "baixar");
   botao.addEventListener("click", () => baixarTabela(["etapa", "projetos", "% dos apresentados", "% da etapa anterior"],
     l.funil.etapas.map((etapa, k) => [ETAPAS_FUNIL[etapa], n[k], Math.round((1000 * n[k]) / (n[0] || 1)) / 10,
                                       k ? Math.round((1000 * n[k]) / (n[k - 1] || 1)) / 10 : null]),

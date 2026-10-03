@@ -29,6 +29,7 @@
   --cinza-2: #c3c2b7;
   --sombra: 0 4px 16px rgba(11, 11, 11, 0.10);
   --aba-ativa: #1c5cab;
+  --trilho-abas: #ebeae4;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -60,6 +61,7 @@
     --cinza-2: #52514e;
     --sombra: 0 4px 16px rgba(0, 0, 0, 0.5);
     --aba-ativa: #256abf;
+    --trilho-abas: #252524;
   }
 }
 
@@ -90,6 +92,7 @@
   --cinza-2: #52514e;
   --sombra: 0 4px 16px rgba(0, 0, 0, 0.5);
   --aba-ativa: #256abf;
+  --trilho-abas: #252524;
 }
 
 * { box-sizing: border-box; }
@@ -162,6 +165,15 @@ h1 { margin: 4px 0 8px; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; le
 .grafico { position: relative; margin-top: 8px; border-radius: 8px; }
 .grafico svg { display: block; max-width: 100%; height: auto; overflow: visible; }
 .nota-grafico { margin: 8px 0 0; font-size: 13px; color: var(--tinta-3); }
+/* rodapé do cartão: ações repetidas (tabela, CSV, imagem), discretas e sempre no mesmo lugar */
+.rodape-cartao { display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 6px; border-top: 1px solid var(--grade); }
+.rodape-cartao .acoes { flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
+.botao.acao { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 4px 8px; min-height: 28px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--tinta-3); }
+.botao.acao:hover { color: var(--tinta); background: var(--realce); }
+.botao.acao[aria-pressed="true"] { color: var(--tinta); }
+.botao.acao svg { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5;
+  stroke-linecap: round; stroke-linejoin: round; }
 
 /* cursor e dica */
 .cursor { position: absolute; top: 0; width: 1px; background: var(--tinta-3); pointer-events: none; }
@@ -216,21 +228,20 @@ h1 { margin: 4px 0 8px; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; le
   .cartao { padding: 14px 12px 10px; }
 }
 
-/* abas */
-.abas { display: flex; gap: 4px; border-bottom: 1px solid var(--borda); }
-.abas { gap: 6px; }
+/* abas: um seletor de dois lados, como um interruptor; o lado ativo fica preenchido */
+.abas { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 10px; background: var(--trilho-abas);
+  border: 1px solid var(--borda); border-radius: 14px; }
 .abas button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font: inherit; text-align: left;
-  padding: 12px 20px 11px; margin-bottom: -1px; border: 1px solid var(--base); border-bottom: 0;
-  border-radius: 12px 12px 0 0; background: var(--superficie); color: var(--tinta-2); cursor: pointer; }
-.abas .aba-titulo { font-size: 20px; font-weight: 700; line-height: 1.2; }
+  padding: 9px 18px 8px; border: 0; border-radius: 10px; background: transparent; color: var(--tinta-2); cursor: pointer; }
+.abas .aba-titulo { font-size: 18px; font-weight: 700; line-height: 1.2; }
 .abas .aba-sub { font-size: 12px; color: var(--tinta-3); }
-.abas button:hover { color: var(--tinta); background: var(--realce); }
-.abas button[aria-selected="true"] { color: #fff; background: var(--aba-ativa); border-color: var(--aba-ativa); }
-.abas button[aria-selected="true"] .aba-sub { color: #fff; }
+.abas button:hover { color: var(--tinta); background: var(--superficie); }
+.abas button[aria-selected="true"] { color: #fff; background: var(--aba-ativa); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); cursor: default; }
+.abas button[aria-selected="true"] .aba-sub { color: rgba(255, 255, 255, 0.85); }
 @media (max-width: 600px) {
-  .abas { width: 100%; }
-  .abas button { flex: 1 1 0; padding: 10px 12px 9px; }
-  .abas .aba-titulo { font-size: 17px; }
+  .abas { display: flex; width: 100%; }
+  .abas button { flex: 1 1 0; padding: 8px 10px 7px; }
+  .abas .aba-titulo { font-size: 16px; }
 }
 .abas button:focus-visible, .alternador button:focus-visible, .barra-linha:focus-visible,
 .busca input:focus-visible, .lista th button:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
@@ -294,7 +305,6 @@ h1 { margin: 4px 0 8px; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; le
 .link-externo { font-size: 14px; }
 .navegacao { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 8px 16px;
   border-bottom: 1px solid var(--borda); }
-.navegacao .abas { border-bottom: 0; }
 .atalhos { display: flex; gap: 16px; font-size: 14px; padding-bottom: 8px; }
 .atalhos a { color: var(--tinta-2); text-decoration: none; }
 .atalhos a:hover { color: var(--tinta); text-decoration: underline; }
