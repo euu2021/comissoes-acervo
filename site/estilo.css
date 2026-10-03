@@ -397,6 +397,21 @@ h1 { margin: 4px 0 8px; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; le
   .ranking .trilho { grid-column: 1 / -1; grid-row: 2; }
 }
 
+/* seções, resumo da semana e período livre */
+.secao { margin: 36px 0 12px; font-size: 22px; letter-spacing: -0.01em; scroll-margin-top: 96px; }
+.secao:first-of-type { margin-top: 8px; }
+.sumario { display: grid; gap: 4px; }
+.sumario-linha { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; }
+.sumario .sumario-secao { color: var(--tinta); font-weight: 600; min-width: 11.5em; }
+.resumo-semana { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 0 0 8px; }
+.resumo-semana .resumo-titulo { grid-column: 1 / -1; margin: 0; font-size: 13px; font-weight: 600; color: var(--tinta-2);
+  text-transform: uppercase; letter-spacing: 0.06em; }
+.resumo-semana .kpi .valor { font-size: 26px; }
+.periodo-livre { display: flex; gap: 8px; align-items: end; }
+.periodo-livre input { font: inherit; font-size: 14px; color: var(--tinta); background: var(--superficie);
+  border: 1px solid var(--borda); border-radius: 8px; padding: 6px 8px; min-height: 36px; }
+@media (max-width: 600px) { .secao { scroll-margin-top: 12px; } .sumario .sumario-secao { min-width: 0; width: 100%; } }
+
 /* calendário de movimentação */
 .ano-calendario { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--tinta-2); }
 .ano-calendario select { font: inherit; font-size: 13px; color: var(--tinta); background: var(--superficie);

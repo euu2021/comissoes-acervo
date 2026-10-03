@@ -45,6 +45,10 @@
     </div>
     <label>Matérias <select id="f-grupo"></select></label>
     <label id="filtro-periodo">Período <select id="f-periodo"></select></label>
+    <span class="periodo-livre" id="periodo-livre" hidden>
+      <label>De <input type="date" id="f-de" min="2018-11-01"></label>
+      <label>Até <input type="date" id="f-ate" min="2018-11-01"></label>
+    </span>
     <button class="botao tema" id="tema" type="button" aria-label="Alternar tema"></button>
   </nav>
   <p class="nome-comissao" id="nome-comissao"></p>
@@ -185,6 +189,9 @@
 
     <div id="painel-evolucao" role="tabpanel" aria-labelledby="aba-evolucao" hidden>
     <nav class="sumario" id="sumario-evolucao" aria-label="Gráficos desta aba"></nav>
+    <section class="resumo-semana" id="resumo-semana" aria-label="Últimos 7 dias"></section>
+
+    <h2 class="secao" id="secao-tamanho">Tamanho e movimento</h2>
     <figure class="cartao" id="c-acervo" data-curto="Tamanho">
       <div class="cartao-topo">
         <div>
@@ -196,7 +203,6 @@
       <div class="grafico" tabindex="0"></div>
       <p class="nota-grafico">As quedas de janeiro de 2021 e de 2025 vêm do fim de legislatura: as proposições em tramitação são arquivadas e voltam às comissões à medida que são desarquivadas.</p>
     </figure>
-
     <figure class="cartao" id="c-comissoes" data-curto="Por comissão">
       <div class="cartao-topo">
         <div>
@@ -206,33 +212,6 @@
       </div>
       <div class="multiplos"></div>
     </figure>
-
-    <figure class="cartao" id="c-fluxo" data-curto="Entradas e saídas">
-      <div class="cartao-topo">
-        <div>
-          <h2>Entradas e saídas</h2>
-          <p class="sub" id="sub-fluxo"></p>
-        </div>
-        <div class="acoes"></div>
-      </div>
-      <ul class="legenda"></ul>
-      <div class="grafico" tabindex="0"></div>
-      <p class="nota-grafico">A matéria entra no acervo quando é enviada à comissão e sai quando é enviada a outra área. As equipes da Secretaria Geral Parlamentar aparecem pelo nome: a de Apoio ao Plenário (SGP-21) recebe as matérias com pareceres prontos para votação em Plenário; a Secretaria das Comissões (SGP-12), as aprovadas em reunião conjunta; a de Controle do Processo Legislativo (SGP-22) devolve às comissões as desarquivadas. O período em curso aparece mais claro, porque ainda não terminou.</p>
-    </figure>
-
-    <figure class="cartao" id="c-saidas" data-curto="Por que saem">
-      <div class="cartao-topo">
-        <div>
-          <h2>Por que as matérias saem</h2>
-          <p class="sub" id="sub-saidas"></p>
-        </div>
-        <div class="acoes"></div>
-      </div>
-      <ul class="legenda"></ul>
-      <div class="grafico" tabindex="0"></div>
-      <p class="nota-grafico">Votada: a passagem teve passo de votação ou saiu com parecer. Os motivos vêm do registro de cada envio no SPLEGIS; saídas sem motivo e sem votação, como as idas a outra área a pedido, ficam em "Outros motivos".</p>
-    </figure>
-
     <figure class="cartao" id="c-base100" data-curto="Crescimento">
       <div class="cartao-topo">
         <div>
@@ -245,7 +224,48 @@
       <div class="grafico" tabindex="0"></div>
       <p class="nota-grafico">A linha tracejada fina marca 100%, o tamanho do primeiro dia. As quedas de janeiro de 2021 e de 2025 são o arquivamento de fim de legislatura; as linhas sobem de novo à medida que as matérias são desarquivadas. Para mudar o dia de referência, mude o período no filtro.</p>
     </figure>
+    <figure class="cartao" id="c-fluxo" data-curto="Entradas e saídas">
+      <div class="cartao-topo">
+        <div>
+          <h2>Entradas e saídas</h2>
+          <p class="sub" id="sub-fluxo"></p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico">A matéria entra no acervo quando é enviada à comissão e sai quando é enviada a outra área. As equipes da Secretaria Geral Parlamentar aparecem pelo nome: a de Apoio ao Plenário (SGP-21) recebe as matérias com pareceres prontos para votação em Plenário; a Secretaria das Comissões (SGP-12), as aprovadas em reunião conjunta; a de Controle do Processo Legislativo (SGP-22) devolve às comissões as desarquivadas. O período em curso aparece mais claro, porque ainda não terminou.</p>
+    </figure>
+    <figure class="cartao" id="c-saidas" data-curto="Por que saem">
+      <div class="cartao-topo">
+        <div>
+          <h2>Por que as matérias saem</h2>
+          <p class="sub" id="sub-saidas"></p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico">Votada: a passagem teve passo de votação ou saiu com parecer. Os motivos vêm do registro de cada envio no SPLEGIS; saídas sem motivo e sem votação, como as idas a outra área a pedido, ficam em "Outros motivos".</p>
+    </figure>
+    <figure class="cartao" id="c-rotas" data-curto="Rotas">
+      <div class="cartao-topo">
+        <div>
+          <h2>Para onde vão as matérias que saem de cada comissão</h2>
+          <p class="sub" id="sub-rotas"></p>
+        </div>
+        <div class="controles">
+          <div class="alternador" role="group" aria-label="Mostrar">
+            <button type="button" data-modo="percentual">Percentual</button><button type="button" data-modo="contagem">Contagem</button>
+          </div>
+          <div class="acoes acoes-csv"></div>
+        </div>
+      </div>
+      <div class="matriz-caixa"></div>
+      <p class="nota-grafico">Mostra as 7 comissões qualquer que seja o filtro, que só destaca a linha da escolhida. Passe o mouse sobre uma célula para ver o número de matérias.</p>
+    </figure>
 
+    <h2 class="secao" id="secao-composicao">Composição e tempo</h2>
     <figure class="cartao" id="c-composicao" data-curto="Composição">
       <div class="cartao-topo">
         <div>
@@ -262,7 +282,6 @@
       <ul class="legenda"></ul>
       <div class="grafico" tabindex="0"></div>
     </figure>
-
     <figure class="cartao" id="c-idade" data-curto="Idade">
       <div class="cartao-topo">
         <div>
@@ -279,7 +298,6 @@
       <ul class="legenda"></ul>
       <div class="grafico" tabindex="0"></div>
     </figure>
-
     <figure class="cartao" id="c-mediana" data-curto="Idade mediana">
       <div class="cartao-topo">
         <div>
@@ -291,7 +309,6 @@
       <div class="grafico" tabindex="0"></div>
       <p class="nota-grafico">Os saltos do começo de 2021 e de 2025 vêm do fim da legislatura. Em janeiro, quase todas as matérias são arquivadas, e no acervo ficam só umas poucas, mais antigas: no início de fevereiro de 2025, eram 17 projetos nas 7 comissões, com mediana de quase 1.900 dias. Os desarquivados voltam nas semanas seguintes, mas só entram na conta depois de recebidos pela comissão; em 2025, isso aconteceu quase todo de uma vez, em meados de março, e a mediana despencou para poucos dias. Até lá, eles aparecem como "Aguardando recebimento" no gráfico acima. Passe o mouse sobre a linha para ver de quantas matérias é a mediana.</p>
     </figure>
-
     <figure class="cartao" id="c-permanencia" data-curto="Permanência">
       <div class="cartao-topo">
         <div>
@@ -305,7 +322,8 @@
       <p class="nota-grafico">Conta do envio à comissão até a saída; a matéria que passa duas vezes pela mesma comissão conta duas passagens. As que ainda estão no acervo e as arquivadas no fim da legislatura (janeiro de 2021 e de 2025) entram na conta só até onde foram acompanhadas (método de Kaplan-Meier). Cada curva para quando restam menos de 30 passagens em acompanhamento.</p>
     </figure>
 
-    <figure class="cartao" id="c-passo" data-curto="Tramitação interna">
+    <h2 class="secao" id="secao-tramitacao">Tramitação interna</h2>
+    <figure class="cartao" id="c-passo" data-curto="Ponto da tramitação">
       <div class="cartao-topo">
         <div>
           <h2>Em que ponto da tramitação interna estão</h2>
@@ -322,7 +340,6 @@
       <div class="grafico" tabindex="0"></div>
       <p class="nota-grafico" id="nota-passo">Sem relator: ainda sem passo interno ou à espera da designação do relator. Em estudo: com o relator ou na assessoria técnica (Procuradoria e Consultoria). Em diligência: à espera de informações do Executivo ou do autor, de ofício ou de audiência pública. Na pauta: em condição de pauta, relatada, adiada, retirada de pauta ou com vista. Votada: deliberada, com certidão de votação ou parecer a publicar.</p>
     </figure>
-
     <figure class="cartao" id="c-sem-relator" data-curto="Sem relator">
       <div class="cartao-topo">
         <div>
@@ -335,50 +352,18 @@
       <div class="grafico" tabindex="0"></div>
       <p class="nota-grafico">No retrato de 02/10/2026, a estimativa deu 202 projetos sem relator e o relatório, 180 (1.170 e 1.156, contando todas as matérias). Quase toda a diferença está na CCJ (35 contra 17): lá, às vezes o relator é designado sem que se lance um passo novo, e o último passo continua sendo "Designar Relator".</p>
     </figure>
-
-    <figure class="cartao" id="c-producao" data-curto="Votações">
+    <figure class="cartao" id="c-tempos" data-curto="Tempo por etapa">
       <div class="cartao-topo">
         <div>
-          <h2>Matérias votadas por mês</h2>
-          <p class="sub" id="sub-producao"></p>
+          <h2>Quanto tempo leva cada etapa</h2>
+          <p class="sub" id="sub-tempos"></p>
         </div>
         <div class="acoes"></div>
       </div>
       <ul class="legenda"></ul>
       <div class="grafico" tabindex="0"></div>
-      <p class="nota-grafico">A votação conta pelo primeiro passo interno de matéria votada (deliberada, com certidão de votação ou parecer a publicar). As aprovadas em reunião conjunta de comissões não ganham esse passo; contam pela saída da comissão cujo motivo registra a aprovação conjunta. O mês em curso aparece mais claro.</p>
+      <p class="nota-grafico">Da chegada ao relator: do recebimento ao primeiro passo de trabalho com relator (estudo, diligência, pauta ou votação). Do relator à pauta: daí até a matéria ser relatada ou entrar em condição de pauta. Da pauta à votação: daí até a votação. A maioria das matérias que entram na pauta é votada em poucos dias; as que ficam paradas, sem concluir a etapa, não entram nesta conta e aparecem no gráfico das etapas, em "Na pauta". A série começa em 2020 porque, antes, as etapas mais longas teriam começado antes de outubro de 2018, quando o feed começa.</p>
     </figure>
-
-    <figure class="cartao" id="c-pareceres" data-curto="Pareceres">
-      <div class="cartao-topo">
-        <div>
-          <h2>Pareceres por mês</h2>
-          <p class="sub" id="sub-pareceres"></p>
-        </div>
-        <div class="acoes"></div>
-      </div>
-      <ul class="legenda"></ul>
-      <div class="grafico" tabindex="0"></div>
-      <p class="nota-grafico">Fonte: webservice do SPLEGIS, com o relator, a data e a conclusão de cada parecer dos projetos apresentados desde 2013. "Outras conclusões" reúne redação final, redação do vencido, pareceres sobre emendas e sobre vetos.</p>
-    </figure>
-
-    <figure class="cartao" id="c-relatores" data-curto="Relatores">
-      <div class="cartao-topo">
-        <div>
-          <h2>Quem relata</h2>
-          <p class="sub" id="sub-relatores"></p>
-        </div>
-        <div class="controles">
-          <div class="alternador" role="group" aria-label="Agrupar por">
-            <button type="button" data-modo="relator">Relatores</button><button type="button" data-modo="partido">Partidos</button>
-          </div>
-          <div class="acoes acoes-csv"></div>
-        </div>
-      </div>
-      <ol class="ranking"></ol>
-      <button class="botao mais" type="button"></button>
-    </figure>
-
     <figure class="cartao" id="c-calendario" data-curto="Calendário">
       <div class="cartao-topo">
         <div>
@@ -397,36 +382,47 @@
       <div class="grafico calendario-caixa"><div class="calendario"></div></div>
     </figure>
 
-    <figure class="cartao" id="c-tempos" data-curto="Tempo por etapa">
+    <h2 class="secao" id="secao-votacoes">Votações e resultados</h2>
+    <figure class="cartao" id="c-producao" data-curto="Votações">
       <div class="cartao-topo">
         <div>
-          <h2>Quanto tempo leva cada etapa</h2>
-          <p class="sub" id="sub-tempos"></p>
+          <h2>Matérias votadas por mês</h2>
+          <p class="sub" id="sub-producao"></p>
         </div>
         <div class="acoes"></div>
       </div>
       <ul class="legenda"></ul>
       <div class="grafico" tabindex="0"></div>
-      <p class="nota-grafico">Da chegada ao relator: do recebimento ao primeiro passo de trabalho com relator (estudo, diligência, pauta ou votação). Do relator à pauta: daí até a matéria ser relatada ou entrar em condição de pauta. Da pauta à votação: daí até a votação. A maioria das matérias que entram na pauta é votada em poucos dias; as que ficam paradas, sem concluir a etapa, não entram nesta conta e aparecem no gráfico das etapas, em "Na pauta". A série começa em 2020 porque, antes, as etapas mais longas teriam começado antes de outubro de 2018, quando o feed começa.</p>
+      <p class="nota-grafico">A votação conta pelo primeiro passo interno de matéria votada (deliberada, com certidão de votação ou parecer a publicar). As aprovadas em reunião conjunta de comissões não ganham esse passo; contam pela saída da comissão cujo motivo registra a aprovação conjunta. O mês em curso aparece mais claro.</p>
     </figure>
-
-    <figure class="cartao" id="c-rotas" data-curto="Rotas">
+    <figure class="cartao" id="c-pareceres" data-curto="Pareceres">
       <div class="cartao-topo">
         <div>
-          <h2>Para onde vão as matérias que saem de cada comissão</h2>
-          <p class="sub" id="sub-rotas"></p>
+          <h2>Pareceres por mês</h2>
+          <p class="sub" id="sub-pareceres"></p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico">Fonte: webservice do SPLEGIS, com o relator, a data e a conclusão de cada parecer dos projetos apresentados desde 2013. "Outras conclusões" reúne redação final, redação do vencido, pareceres sobre emendas e sobre vetos.</p>
+    </figure>
+    <figure class="cartao" id="c-relatores" data-curto="Relatores">
+      <div class="cartao-topo">
+        <div>
+          <h2>Quem relata</h2>
+          <p class="sub" id="sub-relatores"></p>
         </div>
         <div class="controles">
-          <div class="alternador" role="group" aria-label="Mostrar">
-            <button type="button" data-modo="percentual">Percentual</button><button type="button" data-modo="contagem">Contagem</button>
+          <div class="alternador" role="group" aria-label="Agrupar por">
+            <button type="button" data-modo="relator">Relatores</button><button type="button" data-modo="partido">Partidos</button>
           </div>
           <div class="acoes acoes-csv"></div>
         </div>
       </div>
-      <div class="matriz-caixa"></div>
-      <p class="nota-grafico">Mostra as 7 comissões qualquer que seja o filtro, que só destaca a linha da escolhida. Passe o mouse sobre uma célula para ver o número de matérias.</p>
+      <ol class="ranking"></ol>
+      <button class="botao mais" type="button"></button>
     </figure>
-
     <figure class="cartao" id="c-desfechos" data-curto="Desfecho">
       <div class="cartao-topo">
         <div>

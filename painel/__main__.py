@@ -127,6 +127,8 @@ def main() -> int:
 
     conteudo = legislativo.montar(ler_csv(C.DIR_DADOS / "relatorias.csv"), ler_csv(C.DIR_DADOS / "encerrados.csv"),
                                   ler_csv(C.DIR_DADOS / "projetos_por_ano.csv"), max(c["data"] for c in coletas))
+    eventos = [{"data": e["data"], "texto": e["texto"]} for e in ler_csv(C.DIR_DADOS / "eventos.csv")]
+    (SAIDA / "eventos.json").write_text(json.dumps(eventos, ensure_ascii=False), encoding="utf-8")
     arquivo = SAIDA / "legislativo.json"
     arquivo.write_text(json.dumps(conteudo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     log(f"{arquivo.name}: {len(conteudo['relatores'])} relatores, {arquivo.stat().st_size / 1e3:.0f} kB")
