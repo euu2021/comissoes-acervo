@@ -33,6 +33,10 @@ COMISSOES = {
 # e porque zoneinfo exige o pacote tzdata no Windows.
 FUSO = timezone(timedelta(hours=-3))
 
+# Coletas feitas até as 9h valem para o dia anterior: retratam o fim daquele dia. O
+# agendamento do GitHub chega a atrasar horas, e a coleta das 21h47 cai de madrugada.
+VIRADA_DO_DIA = timedelta(hours=9)
+
 # Registros pedidos por requisição. Hoje a maior comissão (CCJ) tem ~2.500 matérias,
 # então uma página basta; a paginação existe só por garantia.
 TAMANHO_PAGINA = 5000

@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Testes da trava contra queda brusca do acervo."""
+"""Testes do coletor: trava contra queda brusca e dia de referência."""
 import unittest
+from datetime import datetime
 
-from coletor.coletar import _queda_brusca
+from coletor.coletar import _queda_brusca, dia_de_referencia
+from coletor.config import FUSO
 
 
 def coletas(data, **por_comissao):
@@ -30,6 +32,18 @@ class TestQuedaBrusca(unittest.TestCase):
     def test_comissao_pequena_nao_e_checada(self):
         anteriores = coletas("2026-10-01", ECON=10)
         self.assertIsNone(_queda_brusca({"ECON": 0}, anteriores))
+
+
+class TestDiaDeReferencia(unittest.TestCase):
+
+    def test_coleta_da_noite_vale_para_o_proprio_dia(self):
+        self.assertEqual(dia_de_referencia(datetime(2026, 10, 2, 21, 47, tzinfo=FUSO)), "2026-10-02")
+
+    def test_coleta_atrasada_de_madrugada_vale_para_o_dia_anterior(self):
+        self.assertEqual(dia_de_referencia(datetime(2026, 10, 3, 2, 48, tzinfo=FUSO)), "2026-10-02")
+
+    def test_depois_das_9h_ja_e_o_novo_dia(self):
+        self.assertEqual(dia_de_referencia(datetime(2026, 10, 3, 9, 0, tzinfo=FUSO)), "2026-10-03")
 
 
 if __name__ == "__main__":

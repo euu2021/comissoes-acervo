@@ -9,12 +9,13 @@ Baixa do SPLEGIS as matérias em análise em cada uma das 7 Comissões e atualiz
   autorias.csv   autores de cada matéria;
   coletas.csv    data, hora e tamanho do acervo de cada comissão em cada coleta.
 
-Idempotente: coletar de novo no mesmo dia substitui a coleta daquele dia.
+Cada coleta vale para um dia de referência; as feitas até as 9h retratam o fim do dia
+anterior. Idempotente: coletar de novo para o mesmo dia substitui a coleta daquele dia.
 Se qualquer comissão falhar, nada é gravado.
 
 Uso:
   python -m coletor.coletar              coleta e grava
-  python -m coletor.coletar --se-faltar  só coleta se o dia ainda não tiver coleta
+  python -m coletor.coletar --se-faltar  só coleta se o dia de referência ainda não tiver coleta
   python -m coletor.coletar --forcar     ignora a trava contra queda brusca do acervo
 """
 from __future__ import annotations
@@ -31,6 +32,11 @@ from coletor import splegis
 from coletor.esquema import (CAMPOS_ACERVO, CAMPOS_AUTORIAS, CAMPOS_COLETAS,
                              CAMPOS_HISTORICO, CAMPOS_MATERIAS, num)
 from coletor.util import gravar_csv, ler_csv, log
+
+
+def dia_de_referencia(agora: datetime) -> str:
+    """Dia que a coleta retrata: antes da virada (9h), o fim do dia anterior."""
+    return (agora - C.VIRADA_DO_DIA).date().isoformat()
 
 
 def _queda_brusca(contagem: dict[str, int], coletas: list[dict]) -> str | None:
@@ -62,13 +68,13 @@ def _resumo_markdown(data: str, contagem: dict[str, int], resumo: dict) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Coleta diária do acervo das Comissões da CMSP.")
     ap.add_argument("--se-faltar", action="store_true",
-                    help="só coleta se a data de hoje ainda não tiver coleta")
+                    help="só coleta se o dia de referência ainda não tiver coleta")
     ap.add_argument("--forcar", action="store_true",
                     help="grava mesmo que o acervo de alguma comissão tenha caído bruscamente")
     args = ap.parse_args(argv)
 
     agora = datetime.now(C.FUSO).replace(microsecond=0)
-    data = agora.date().isoformat()
+    data = dia_de_referencia(agora)
     coletas = ler_csv(C.ARQ_COLETAS)
     datas = sorted({c["data"] for c in coletas})
 

@@ -9,8 +9,8 @@ O SPLEGIS mostra só o retrato do momento. Este repositório tira um retrato por
 ## Como funciona
 
 - **Fonte:** o relatório público [Projetos em Análise nas Comissões](https://splegisconsulta.saopaulo.sp.leg.br/Relatorio/IndexComissaoProjetoTramitacaoInterna) do SPLEGIS. O coletor lê o endpoint JSON que alimenta a tabela do relatório, com todos os tipos de matéria.
-- **Quando:** um GitHub Action ([`.github/workflows/coleta.yml`](.github/workflows/coleta.yml)) roda todo dia às 21h47 (horário de Brasília) e faz commit dos dados em [`dados/`](dados/). Uma repescagem às 23h47 coleta só se a primeira execução tiver falhado.
-- **Idempotente:** coletar de novo no mesmo dia substitui a coleta daquele dia.
+- **Quando:** um GitHub Action ([`.github/workflows/coleta.yml`](.github/workflows/coleta.yml)) roda todo dia às 21h47 (horário de Brasília) e faz commit dos dados em [`dados/`](dados/). Uma repescagem às 23h47 coleta só se a primeira execução tiver falhado. O agendamento do GitHub às vezes atrasa horas; por isso, coletas feitas até as 9h valem para o dia anterior, cujo fim elas retratam.
+- **Idempotente:** coletar de novo para o mesmo dia substitui a coleta daquele dia.
 - **À prova de resposta truncada:** se alguma comissão falhar, nada é gravado. Se o acervo de uma comissão cair mais de 50% de um dia para o outro, a coleta também é barrada, porque isso indica resposta incompleta do SPLEGIS e seria registrado como uma saída em massa de matérias.
 - **Sem dependências:** só a biblioteca padrão do Python.
 
