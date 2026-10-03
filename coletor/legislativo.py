@@ -11,6 +11,9 @@ webservice do SPLEGIS (https://splegisws.saopaulo.sp.leg.br/ws/ws2.asmx):
   projetos_por_ano.csv quantos projetos de cada tipo foram apresentados por ano (ProjetosPorAno)
   assuntos.csv         assuntos de cada projeto, no vocabulário da Câmara (ProjetosAssuntos)
   autores.csv          autores de cada projeto, na ordem, com a data de leitura (ProjetosAutores)
+  vetos.csv            projetos vetados, total ou parcialmente, pelos autores de autores.csv
+                       (ProjetosVetadosPorPromovente). O veto aparece aqui logo que é dado; em
+                       encerrados.csv, só quando a Câmara o aprecia, às vezes anos depois.
   filiacoes.csv        partidos de cada vereador, com as datas (VereadoresCMSP)
   cargos_comissoes.csv presidentes, vices e membros das 7 comissões, com as datas (VereadoresCMSP)
 
@@ -41,6 +44,7 @@ CAMPOS_ENCERRADOS = ["rotulo", "tipo", "ano", "leitura", "encerramento", "motivo
 CAMPOS_CONTAGEM = ["ano", "tipo", "projetos"]
 CAMPOS_ASSUNTOS = ["rotulo", "assuntos"]
 CAMPOS_AUTORES = ["rotulo", "leitura", "ordem", "autor_codigo", "autor"]
+CAMPOS_VETOS = ["rotulo", "veto"]
 CAMPOS_FILIACOES = ["vereador", "partido", "inicio", "fim"]
 CAMPOS_CARGOS = ["comissao", "cargo", "vereador", "inicio", "fim"]
 # Comissões permanentes no cadastro de cargos, pelo nome (as extraordinárias ficam de fora).
@@ -94,6 +98,11 @@ def autores(itens: list[dict]) -> list[dict]:
     return [{"rotulo": f"{p['tipo']} {p['numero']}/{p['ano']}", "leitura": _data(p.get("leitura")), "ordem": str(k),
              "autor_codigo": str(a.get("chave") or ""), "autor": (a.get("nome") or "").strip()}
             for p in itens for k, a in enumerate(p.get("autores") or [], 1)]
+
+
+def vetos(itens: list[dict]) -> list[dict]:
+    return [{"rotulo": f"{p['tipo']} {p['numero']}/{p['ano']}", "veto": ((p.get("veto") or {}).get("nome") or "").strip()}
+            for p in itens if p.get("tipo") in TIPOS]
 
 
 def vereadores(itens: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -165,6 +174,16 @@ def main(argv: list[str] | None = None) -> int:
     _refazer(C.DIR_DADOS / "encerrados.csv", CAMPOS_ENCERRADOS, enc, feitos, lambda l: int(l["ano"]))
     _refazer(C.DIR_DADOS / "assuntos.csv", CAMPOS_ASSUNTOS, ass, feitos, lambda l: _ano(l["rotulo"]))
     _refazer(C.DIR_DADOS / "autores.csv", CAMPOS_AUTORES, aut, feitos, lambda l: _ano(l["rotulo"]))
+
+    # Vetos: a consulta é por autor, com os projetos de todos os anos; ficam só os dos anos refeitos.
+    codigos = sorted({a["autor_codigo"] for a in aut if a["autor_codigo"]}, key=int)
+    vet: dict[str, dict] = {}
+    for codigo in codigos:
+        for v in vetos(_json(f"ProjetosVetadosPorPromoventeJSON?Codigo={codigo}")):
+            if _ano(v["rotulo"]) in feitos:
+                vet[v["rotulo"]] = v
+    log(f"vetos: {len(codigos)} autores consultados")
+    _refazer(C.DIR_DADOS / "vetos.csv", CAMPOS_VETOS, list(vet.values()), feitos, lambda l: _ano(l["rotulo"]))
     _refazer(C.DIR_DADOS / "projetos_por_ano.csv", CAMPOS_CONTAGEM, cont, set(anos_contagem), lambda l: int(l["ano"]))
     return 0
 

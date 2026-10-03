@@ -3,7 +3,7 @@
 import unittest
 
 from coletor.legislativo import encerrados, relatorias
-from painel.legislativo import (assunto_util, autoria_dos_projetos, conclusao, desfecho, funil, membros, montar,
+from painel.legislativo import (assunto_util, autoria_dos_projetos, conclusao, desfecho, desfechos_dos_projetos, funil, membros, montar,
                                 partido_na_data, prazos)
 
 
@@ -120,12 +120,19 @@ class TestLegislativo(unittest.TestCase):
                           {"tipo": "PL", "numero": 4, "ano": 2022, "leitura": "", "encerramento": "",
                            "motivo": "Encerrado-RETIRADO PELO AUTOR"}])
         ass = [{"rotulo": "PL 4/2022", "assuntos": "DENOMINACAO | LOGRADOURO PUBLICO"}]
-        f = funil(rel, enc, autoria, ass, [2022])
+        f = funil(rel, desfechos_dos_projetos(enc), autoria, ass, [2022])
         self.assertEqual(f["etapa"], [2, 1, 5, 0])  # aprovado sem passar pelas comissões: conta em tudo
         self.assertEqual(f["comissoes"][0], 0b11)  # CCJ e FIN
         self.assertEqual(f["homenagem"], [0, 0, 0, 1])
         self.assertEqual([f["desfechos"][d] for d in f["desfecho"]], ["aberto", "aberto", "lei", "retirado"])
         self.assertEqual([f["partidos"][p] if p >= 0 else "" for p in f["partido"]], ["PT", "PT", "", "PL"])
+
+    def test_veto_sem_encerramento(self):
+        enc = encerrados([{"tipo": "PL", "numero": 1, "ano": 2020, "leitura": "", "encerramento": "",
+                           "motivo": "Encerrado-PROMULGADO"}])  # veto derrubado: o encerramento manda
+        vetos = [{"rotulo": "PL 1/2020", "veto": "Veto Total"}, {"rotulo": "PL 2/2023", "veto": "Veto Total"},
+                 {"rotulo": "PL 3/2023", "veto": "Veto Parcial"}]
+        self.assertEqual(desfechos_dos_projetos(enc, vetos), {"PL 1/2020": "lei", "PL 2/2023": "vetado", "PL 3/2023": "lei"})
 
 
 if __name__ == "__main__":

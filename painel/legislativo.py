@@ -226,7 +226,17 @@ def etapa_do_projeto(linhas: list[dict], fim: str | None) -> int:
     return 1 if linhas else 0
 
 
-def funil(relatorias: list[dict], encerrados: list[dict], autoria: dict[str, tuple[str, str]],
+def desfechos_dos_projetos(encerrados: list[dict], vetos: list[dict] = ()) -> dict[str, str]:
+    """{rótulo: desfecho}. O encerramento manda; sem ele, o projeto vetado já tem desfecho: o
+    veto total é registrado como encerramento só quando a Câmara o aprecia, às vezes anos depois
+    (os de 2013 a 2022 foram encerrados de uma vez, em 2019 e em 2025), e com o veto parcial a
+    lei já vale, sem as partes vetadas."""
+    fim = {v["rotulo"]: "vetado" if "TOTAL" in v["veto"].upper() else "lei" for v in vetos}
+    fim.update({e["rotulo"]: desfecho(e["motivo"]) for e in encerrados})
+    return fim
+
+
+def funil(relatorias: list[dict], fim: dict[str, str], autoria: dict[str, tuple[str, str]],
           assuntos: list[dict], anos: list[int]) -> dict:
     """Um registro por projeto apresentado nos `anos`, em colunas, para o funil do painel: ano,
     tipo, autoria, partido do primeiro autor, se é homenagem, as comissões do primeiro despacho
@@ -234,7 +244,6 @@ def funil(relatorias: list[dict], encerrados: list[dict], autoria: dict[str, tup
     por_projeto: dict[str, list[dict]] = defaultdict(list)
     for r in relatorias:
         por_projeto[r["rotulo"]].append(r)
-    fim = {e["rotulo"]: desfecho(e["motivo"]) for e in encerrados}
     temas = {a["rotulo"]: set(a["assuntos"].split(" | ")) for a in assuntos}
     desfechos = [*DESFECHOS, "aberto"]
     partidos: dict[str, int] = {}
@@ -263,7 +272,7 @@ def funil(relatorias: list[dict], encerrados: list[dict], autoria: dict[str, tup
 
 def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict], fim: str,
            filiacoes: list[dict] = (), cargos: list[dict] = (), assuntos: list[dict] = (),
-           passagens: list[dict] = (), autores: list[dict] = ()) -> dict:
+           passagens: list[dict] = (), autores: list[dict] = (), vetos: list[dict] = ()) -> dict:
     meses = []
     m = date(2018, 11, 1)
     while m.isoformat()[:7] <= fim[:7]:
@@ -299,15 +308,15 @@ def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict],
     for c in contagem:
         apresentados[int(c["ano"])] += int(c["projetos"])
     desfechos = {k: [0] * len(anos) for k in DESFECHOS}
-    for e in encerrados:
-        ano = int(e["ano"])
-        if ano in anos:
-            desfechos[desfecho(e["motivo"])][anos.index(ano)] += 1
+    fim_de = desfechos_dos_projetos(encerrados, vetos)
+    for rotulo, k in fim_de.items():
+        ano = int(rotulo.rsplit("/", 1)[1])
+        if ano in anos and rotulo.split()[0] in TIPOS_FUNIL:
+            desfechos[k][anos.index(ano)] += 1
     encerrados_ano = [sum(desfechos[k][i] for k in DESFECHOS) for i in range(len(anos))]
 
     # Desfecho pela autoria e pelo partido do primeiro autor (só projetos com autor conhecido).
     autoria = autoria_dos_projetos(autores, por_vereador)
-    motivo = {e["rotulo"]: e["motivo"] for e in encerrados}
     vazio = lambda: {k: [0] * len(anos) for k in [*DESFECHOS, "aberto"]}  # noqa: E731
     por_autoria = {a: vazio() for a in AUTORIAS}
     por_partido: dict[str, dict] = defaultdict(vazio)
@@ -315,7 +324,7 @@ def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict],
         ano = int(rotulo.rsplit("/", 1)[1])
         if ano not in anos:
             continue
-        k = desfecho(motivo[rotulo]) if rotulo in motivo else "aberto"
+        k = fim_de.get(rotulo, "aberto")
         por_autoria[classe][k][anos.index(ano)] += 1
         if partido:
             por_partido[partido][k][anos.index(ano)] += 1
@@ -376,5 +385,5 @@ def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict],
         "desfechos_partido": dict(sorted(por_partido.items())),
         "prazos": prazos(relatorias, autoria, anos),
         "membros": membros(cargos, por_vereador, fim),
-        "funil": funil(relatorias, encerrados, autoria, assuntos, anos),
+        "funil": funil(relatorias, fim_de, autoria, assuntos, anos),
     }
