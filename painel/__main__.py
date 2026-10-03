@@ -24,7 +24,7 @@ from datetime import datetime
 
 from coletor import config as C
 from coletor.util import ler_csv, log
-from painel import etapas, fluxos, retrato
+from painel import composicao, etapas, fluxos, retrato
 from reconstrucao import serie as S
 
 SAIDA = C.RAIZ / "site" / "dados"
@@ -104,7 +104,9 @@ def main() -> int:
 
     lista = fluxos.passagens(ler_csv(C.DIR_DADOS / "reconstrucao" / "presencas.csv"), historico,
                              coletas, ler_csv(C.ARQ_TRAMITACOES))
-    conteudo = fluxos.montar(lista, max(c["data"] for c in coletas), inicio_coleta, ultima["coletado_em"])
+    autorias = composicao.autorias(ler_csv(C.DIR_DADOS / "reconstrucao" / "autorias.csv"), ler_csv(C.ARQ_AUTORIAS),
+                                   ler_csv(C.ARQ_MATERIAS))
+    conteudo = fluxos.montar(lista, max(c["data"] for c in coletas), inicio_coleta, ultima["coletado_em"], autorias)
     arquivo = SAIDA / "fluxos.json"
     arquivo.write_text(json.dumps(conteudo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     log(f"{arquivo.name}: {len(lista)} passagens, {arquivo.stat().st_size / 1e6:.1f} MB")

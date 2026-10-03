@@ -359,6 +359,26 @@ h1 { margin: 4px 0 8px; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; le
 .matriz.com-selecao tbody tr:not(.selecionada) > th { color: var(--tinta-3); }
 .matriz tr.selecionada th { color: var(--tinta); box-shadow: inset 3px 0 0 var(--s1); }
 
+/* atalhos da aba de evolução */
+.sumario { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 16px; font-size: 13px; color: var(--tinta-3); }
+.sumario a { color: var(--tinta-2); text-decoration: none; }
+.sumario a:hover { color: var(--tinta); text-decoration: underline; }
+#painel-evolucao > .cartao { scroll-margin-top: 96px; }
+@media (max-width: 600px) { #painel-evolucao > .cartao { scroll-margin-top: 12px; } }
+
+/* calendário de movimentação */
+.ano-calendario { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--tinta-2); }
+.ano-calendario select { font: inherit; font-size: 13px; color: var(--tinta); background: var(--superficie);
+  border: 1px solid var(--borda); border-radius: 8px; padding: 4px 8px; min-height: 32px; }
+.calendario-caixa { overflow-x: auto; padding-bottom: 4px; }
+.calendario { display: grid; gap: 2px; min-width: 560px; font-size: 11px; color: var(--tinta-3); }
+.calendario .mes { white-space: nowrap; }
+.calendario .dia-semana { padding-right: 4px; line-height: 1; align-self: center; }
+.calendario .dia { aspect-ratio: 1; border-radius: 2px; background: var(--realce); outline: 1px solid var(--grade); outline-offset: -1px; }
+.calendario .dia.fora { visibility: hidden; }
+.calendario .dia[data-n]:hover { outline: 2px solid var(--tinta); }
+.legenda .amostra.vazio-cal { background: var(--realce); outline: 1px solid var(--grade); outline-offset: -1px; }
+
 /* passos da metodologia */
 .passos { margin: 8px 0 0; padding-left: 20px; }
 .passos li { margin-bottom: 8px; color: var(--tinta-2); }

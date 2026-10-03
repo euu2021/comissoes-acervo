@@ -10,6 +10,7 @@ passagens são as de fluxos.py.
 - Votação: o primeiro passo de etapa "votada" na passagem (deliberado, certidão de votação,
   parecer a publicar). Matérias aprovadas em reunião conjunta de comissões não ganham esse
   passo; contam pela saída cujo motivo cita a reunião conjunta.
+- Calendário: passos internos lançados e votações em cada dia.
 - Etapas: da chegada (recebimento) ao primeiro passo de trabalho com relator (estudo,
   diligência, pauta ou votação); daí ao primeiro passo de pauta (ou votação); e da pauta à
   votação. Cada tempo entra no ano em que a etapa terminou; etapas que não terminaram (a
@@ -67,6 +68,18 @@ def _dias(a: str, b: str) -> float:
     return (datetime.fromisoformat(b) - datetime.fromisoformat(a)).total_seconds() / 86400
 
 
+INICIO = date(2018, 11, 1)  # primeiro mês da série
+
+
+def _esparso(por_dia: dict[int, int]) -> list[int]:
+    """{dia: n} -> [Δdia, n, Δdia, n, ...], com os dias contados desde INICIO."""
+    saida, anterior = [], 0
+    for dia in sorted(por_dia):
+        saida += [dia - anterior, por_dia[dia]]
+        anterior = dia
+    return saida
+
+
 def calcular(passagens: list[dict], passos: dict, fim: str) -> dict:
     """Votações por mês e tempos das etapas por ano, por grupo × comissão (e TODAS)."""
     meses = []
@@ -78,6 +91,10 @@ def calcular(passagens: list[dict], passos: dict, fim: str) -> dict:
     pos_mes = {mes: i for i, mes in enumerate(meses)}
     contagem = defaultdict(lambda: {"votadas": [0] * len(meses), "conjunta": [0] * len(meses)})
     duracoes = defaultdict(list)  # (grupo, comissao, estagio, ano) -> dias
+    calendario = defaultdict(lambda: {"passos": defaultdict(int), "votos": defaultdict(int)})
+
+    def dia(t: str) -> int:
+        return (date.fromisoformat(t[:10]) - INICIO).days
 
     for p in passagens:
         grupos = ("todas", "projetos") if p["rotulo"].split()[0] in PROJETOS else ("todas",)
@@ -87,13 +104,19 @@ def calcular(passagens: list[dict], passos: dict, fim: str) -> dict:
         fim_p = bisect_left(lista, (p["ate"],)) if p["ate"] else len(lista)
         dentro = [x for x in lista[inicio:fim_p] if x[1]]
 
+        for d, _ in dentro:
+            if d >= "2018-11-01":
+                for k in chaves:
+                    calendario[k]["passos"][dia(d)] += 1
         voto = next((d for d, e in dentro if e == "etapa_votado"), None)
         if voto and voto[:7] in pos_mes:
             for k in chaves:
                 contagem[k]["votadas"][pos_mes[voto[:7]]] += 1
+                calendario[k]["votos"][dia(voto)] += 1
         elif not voto and p["ate"] and conjunta(p.get("motivo", "")) and p["ate"][:7] in pos_mes:
             for k in chaves:
                 contagem[k]["conjunta"][pos_mes[p["ate"][:7]]] += 1
+                calendario[k]["votos"][dia(p["ate"])] += 1
 
         if not p["desde"] or p["desde"] < "2018-11-01":
             continue
@@ -115,10 +138,11 @@ def calcular(passagens: list[dict], passos: dict, fim: str) -> dict:
                 for g, c in chaves:
                     duracoes[(g, c, estagio, ano)].append(_dias(a, b))
 
-    producao, tempos = {}, {}
+    producao, tempos, dias = {}, {}, {}
     comissoes = sorted({p["comissao"] for p in passagens}) + [TODAS]
     for g in ("projetos", "todas"):
         producao[g] = {c: contagem[(g, c)] for c in comissoes}
+        dias[g] = {c: {m: _esparso(calendario[(g, c)][m]) for m in ("passos", "votos")} for c in comissoes}
         tempos[g] = {}
         for c in comissoes:
             tempos[g][c] = {}
@@ -134,4 +158,5 @@ def calcular(passagens: list[dict], passos: dict, fim: str) -> dict:
                     serie["p75"].append(None if q[2] is None else round(q[2]))
                     serie["n"].append(len(v))
                 tempos[g][c][estagio] = serie
-    return {"meses": meses, "anos": anos, "producao": producao, "tempos": tempos}
+    return {"meses": meses, "anos": anos, "producao": producao, "tempos": tempos,
+            "calendario": {"inicio": INICIO.isoformat(), **dias}}

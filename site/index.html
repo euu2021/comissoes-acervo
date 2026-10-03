@@ -184,7 +184,8 @@
     </div>
 
     <div id="painel-evolucao" role="tabpanel" aria-labelledby="aba-evolucao" hidden>
-    <figure class="cartao" id="c-acervo">
+    <nav class="sumario" id="sumario-evolucao" aria-label="Gráficos desta aba"></nav>
+    <figure class="cartao" id="c-acervo" data-curto="Tamanho">
       <div class="cartao-topo">
         <div>
           <h2>Tamanho do acervo</h2>
@@ -196,7 +197,7 @@
       <p class="nota-grafico">As quedas de janeiro de 2021 e de 2025 vêm do fim de legislatura: as proposições em tramitação são arquivadas e voltam às comissões à medida que são desarquivadas.</p>
     </figure>
 
-    <figure class="cartao" id="c-fluxo">
+    <figure class="cartao" id="c-fluxo" data-curto="Entradas e saídas">
       <div class="cartao-topo">
         <div>
           <h2>Entradas e saídas</h2>
@@ -209,7 +210,7 @@
       <p class="nota-grafico">A matéria entra no acervo quando é enviada à comissão e sai quando é enviada a outra área. A Secretaria Geral Parlamentar reúne as equipes da SGP (como SGP-12, SGP-21 e SGP-23), por onde as matérias seguem depois das comissões. O período em curso aparece mais claro, porque ainda não terminou.</p>
     </figure>
 
-    <figure class="cartao" id="c-comissoes">
+    <figure class="cartao" id="c-comissoes" data-curto="Por comissão">
       <div class="cartao-topo">
         <div>
           <h2>Por comissão</h2>
@@ -219,7 +220,36 @@
       <div class="multiplos"></div>
     </figure>
 
-    <figure class="cartao" id="c-idade">
+    <figure class="cartao" id="c-base100" data-curto="Crescimento comparado">
+      <div class="cartao-topo">
+        <div>
+          <h2>Crescimento comparado</h2>
+          <p class="sub" id="sub-base100"></p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+    </figure>
+
+    <figure class="cartao" id="c-composicao" data-curto="Composição">
+      <div class="cartao-topo">
+        <div>
+          <h2>Do que é feito o acervo</h2>
+          <p class="sub" id="sub-composicao"></p>
+        </div>
+        <div class="controles">
+          <div class="alternador" role="group" aria-label="Agrupar por">
+            <button type="button" data-modo="legislatura">Legislatura</button><button type="button" data-modo="tipo">Tipo</button><button type="button" data-modo="autoria">Autoria</button>
+          </div>
+          <div class="acoes"></div>
+        </div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+    </figure>
+
+    <figure class="cartao" id="c-idade" data-curto="Idade">
       <div class="cartao-topo">
         <div>
           <h2>Há quanto tempo estão na comissão</h2>
@@ -231,7 +261,7 @@
       <div class="grafico" tabindex="0"></div>
     </figure>
 
-    <figure class="cartao" id="c-mediana">
+    <figure class="cartao" id="c-mediana" data-curto="Idade mediana">
       <div class="cartao-topo">
         <div>
           <h2>Idade mediana</h2>
@@ -242,7 +272,7 @@
       <div class="grafico" tabindex="0"></div>
     </figure>
 
-    <figure class="cartao" id="c-permanencia">
+    <figure class="cartao" id="c-permanencia" data-curto="Permanência">
       <div class="cartao-topo">
         <div>
           <h2>Quanto tempo as matérias ficam na comissão</h2>
@@ -255,7 +285,7 @@
       <p class="nota-grafico">Conta do envio à comissão até a saída; a matéria que passa duas vezes pela mesma comissão conta duas passagens. As que ainda estão no acervo e as arquivadas no fim da legislatura (janeiro de 2021 e de 2025) entram na conta só até onde foram acompanhadas (método de Kaplan-Meier). Cada curva para quando restam menos de 30 passagens em acompanhamento.</p>
     </figure>
 
-    <figure class="cartao" id="c-passo">
+    <figure class="cartao" id="c-passo" data-curto="Etapas">
       <div class="cartao-topo">
         <div>
           <h2>Em que ponto da tramitação interna estão</h2>
@@ -273,7 +303,7 @@
       <p class="nota-grafico" id="nota-passo">Sem relator: ainda sem passo interno ou à espera da designação do relator. Em estudo: com o relator ou na assessoria técnica (Procuradoria e Consultoria). Em diligência: à espera de informações do Executivo ou do autor, de ofício ou de audiência pública. Na pauta: em condição de pauta, relatada, adiada, retirada de pauta ou com vista. Votada: deliberada, com certidão de votação ou parecer a publicar.</p>
     </figure>
 
-    <figure class="cartao" id="c-sem-relator">
+    <figure class="cartao" id="c-sem-relator" data-curto="Sem relator">
       <div class="cartao-topo">
         <div>
           <h2>Matérias sem relator</h2>
@@ -286,7 +316,7 @@
       <p class="nota-grafico">No retrato de 02/10/2026, a estimativa deu 202 projetos sem relator e o relatório, 180 (1.170 e 1.156, contando todas as matérias). Quase toda a diferença está na CCJ (35 contra 17): lá, às vezes o relator é designado sem que se lance um passo novo, e o último passo continua sendo "Designar Relator".</p>
     </figure>
 
-    <figure class="cartao" id="c-producao">
+    <figure class="cartao" id="c-producao" data-curto="Votações">
       <div class="cartao-topo">
         <div>
           <h2>Matérias votadas por mês</h2>
@@ -299,7 +329,25 @@
       <p class="nota-grafico">A votação conta pelo primeiro passo interno de matéria votada (deliberada, com certidão de votação ou parecer a publicar). As aprovadas em reunião conjunta de comissões não ganham esse passo; contam pela saída da comissão cujo motivo registra a aprovação conjunta. O mês em curso aparece mais claro.</p>
     </figure>
 
-    <figure class="cartao" id="c-tempos">
+    <figure class="cartao" id="c-calendario" data-curto="Calendário">
+      <div class="cartao-topo">
+        <div>
+          <h2>Calendário de movimentação</h2>
+          <p class="sub" id="sub-calendario"></p>
+        </div>
+        <div class="controles">
+          <div class="alternador" role="group" aria-label="Contar">
+            <button type="button" data-metrica="votos">Votações</button><button type="button" data-metrica="passos">Passos internos</button>
+          </div>
+          <label class="ano-calendario">Ano <select id="f-ano-calendario"></select></label>
+          <div class="acoes"></div>
+        </div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico calendario-caixa"><div class="calendario"></div></div>
+    </figure>
+
+    <figure class="cartao" id="c-tempos" data-curto="Tempo por etapa">
       <div class="cartao-topo">
         <div>
           <h2>Quanto tempo leva cada etapa</h2>
@@ -312,7 +360,7 @@
       <p class="nota-grafico">Da chegada ao relator: do recebimento ao primeiro passo de trabalho com relator (estudo, diligência, pauta ou votação). Do relator à pauta: daí até a matéria ser relatada ou entrar em condição de pauta. Da pauta à votação: daí até a votação. A maioria das matérias que entram na pauta é votada em poucos dias; as que ficam paradas, sem concluir a etapa, não entram nesta conta e aparecem no gráfico das etapas, em "Na pauta". A série começa em 2020 porque, antes, as etapas mais longas teriam começado antes de outubro de 2018, quando o feed começa.</p>
     </figure>
 
-    <figure class="cartao" id="c-rotas">
+    <figure class="cartao" id="c-rotas" data-curto="Rotas">
       <div class="cartao-topo">
         <div>
           <h2>Para onde vão as matérias que saem de cada comissão</h2>
@@ -340,6 +388,7 @@
         <li><strong>Normalização.</strong> Cada matéria vira uma linha com a tramitação externa (data, origem, recebimento) e a interna (data, área e estado) separadas, o relator e os autores, com os prefeitos agrupados em Executivo e as composições da Mesa em Mesa Diretora.</li>
         <li><strong>Indicadores.</strong> A idade conta dias completos desde o recebimento pela comissão (ou desde a entrada no estado atual), nas faixas de até 30, 31 a 90, 91 a 180, 181 a 365 e mais de 365 dias. Matérias enviadas e ainda não recebidas fazem parte do acervo, como no relatório.</li>
         <li><strong>Etapas.</strong> O último passo interno de cada matéria indica em que etapa ela está: sem relator, em estudo, em diligência, na pauta ou votada. Antes da coleta diária, é assim que se estima quantas estavam sem relator.</li>
+        <li><strong>Composição.</strong> A legislatura de apresentação sai do ano no número da matéria (o PL 502/2026 é da legislatura 2025–2028). A autoria é a do primeiro autor; os prefeitos são reconhecidos pelo código de autor no SPLEGIS, diferente do que a mesma pessoa tinha como vereador.</li>
         <li><strong>Votações e tempos.</strong> A votação de uma matéria numa comissão é o primeiro passo interno de matéria votada, ou a saída aprovada em reunião conjunta. O tempo de cada etapa vai de um passo ao primeiro passo da etapa seguinte. Desde o início da coleta diária, os passos internos também vêm do feed do SPLEGIS.</li>
         <li><strong>Entradas e saídas.</strong> Cada passagem de uma matéria por uma comissão vai do envio a ela até o envio para outra área, com a origem e o destino. Desde o início da coleta diária, a hora e o destino de cada saída vêm das tramitações que o SPLEGIS registra no dia.</li>
         <li><strong>Série histórica.</strong> Cada retrato fica guardado. O período de novembro de 2018 a outubro de 2026 foi reconstruído a partir dos eventos de tramitação que o SPLEGIS registra dia a dia e conferido contra o histórico oficial das matérias (<a href="https://github.com/prototiposlegisla/comissoes-acervo/blob/main/dados/reconstrucao/README.md">método e validação</a>).</li>

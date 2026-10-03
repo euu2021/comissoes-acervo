@@ -18,9 +18,11 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date
 
+from painel import composicao
 from reconstrucao.serie import PROJETOS
 
 ORDEM = ["CCJ", "FIN", "URB", "ADM", "ECON", "EDUC", "SAUDE"]
+TIPOS = ["PL", "PDL", "PR", "PLO", "DOCREC", "Outros"]
 INICIO_FEED = date(2018, 10, 26)  # dia 0
 DESCONHECIDO = "?"
 
@@ -138,8 +140,11 @@ def fim_de_legislatura(motivo: str) -> bool:
     return "TERMINO DE LEGISLATURA" in (motivo or "").upper()
 
 
-def montar(lista: list[dict], fim: str, inicio_coleta: str, atualizado_em: str) -> dict:
-    """As passagens em colunas, para o painel."""
+def montar(lista: list[dict], fim: str, inicio_coleta: str, atualizado_em: str,
+           autorias: dict[str, str] | None = None) -> dict:
+    """As passagens em colunas, para o painel. `autorias` dá a categoria de autoria de cada
+    rótulo (ver composicao.py)."""
+    autorias = autorias or {}
     areas = sorted(({p["origem"] for p in lista} | {p["destino"] for p in lista}) - {"", DESCONHECIDO})
     indice = {a: i for i, a in enumerate(areas)}
 
@@ -164,4 +169,10 @@ def montar(lista: list[dict], fim: str, inicio_coleta: str, atualizado_em: str) 
         "destino": [indice.get(p["destino"]) for p in lista],
         # 1: saída pelo arquivamento de fim de legislatura (art. 275 do Regimento Interno)
         "fim_legislatura": [int(fim_de_legislatura(p.get("motivo", ""))) for p in lista],
+        # Composição: ano de apresentação, tipo e autoria de cada matéria.
+        "ano": [int(p["rotulo"].rsplit("/", 1)[1]) for p in lista],
+        "tipos": TIPOS,
+        "tipo": [TIPOS.index(t) if (t := p["rotulo"].split()[0]) in TIPOS else len(TIPOS) - 1 for p in lista],
+        "autorias": composicao.AUTORIAS,
+        "autoria": [composicao.AUTORIAS.index(composicao.categoria(p["rotulo"], autorias)) for p in lista],
     }

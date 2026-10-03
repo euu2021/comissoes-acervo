@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Testes das votações por mês e do tempo de cada etapa."""
 import unittest
+from datetime import date
 
 from painel.etapas import calcular, conjunta, passos_por_materia
 
@@ -64,6 +65,10 @@ class TestEtapas(unittest.TestCase):
         k = j["anos"].index(2025)
         self.assertEqual([tempos[e]["mediana"][k] for e in ("relator", "estudo", "pauta")], [10, 30, 7])
         self.assertEqual(j["tempos"]["projetos"]["FIN"]["relator"]["n"][k], 0)  # nunca saiu de "sem relator"
+        # Calendário: 4 passos da CCJ em dias diferentes; a votação em 17/04/2025.
+        cal = j["calendario"]["projetos"]["CCJ"]
+        self.assertEqual(sum(cal["passos"][1::2]), 4)
+        self.assertEqual(cal["votos"], [(date(2025, 4, 17) - date(2018, 11, 1)).days, 1])
 
 
 if __name__ == "__main__":

@@ -551,6 +551,8 @@ function renderEvolucao(j, serie, fluxos, tramitacao) {
   }
 
   renderMultiplos(j, i0, i1);
+  renderBase100(j, i0, i1);
+  if (!(fluxos instanceof Error) && fluxos) renderComposicao(fluxos, j, i0, i1, { comissao: nomeComissao, grupo: nomeGrupo });
 
   // Idade
   const cIdade = document.getElementById("c-idade");
@@ -611,7 +613,162 @@ function renderEvolucao(j, serie, fluxos, tramitacao) {
   }
 
   renderFluxos(fluxos, { comissao: nomeComissao, grupo: nomeGrupo });
+  renderSumario();
   renderTramitacao(tramitacao, { comissao: nomeComissao, grupo: nomeGrupo }, j.datasObj[j.datasObj.length - 1]);
+}
+
+// ----------------------------------------------------------------------------- composição e base 100
+/* Composição do acervo por legislatura de apresentação, tipo ou autoria, dia a dia, a partir
+   das passagens (dados/fluxos.json): uma matéria conta enquanto está no acervo. */
+function legislaturasDe(f) {
+  const ultima = 2001 + 4 * Math.floor((d3.max(f.ano) - 2001) / 4);
+  const faixa = (a) => `${a}–${a + 3}`;
+  // Da mais antiga (base) para a mais nova (topo); mais antiga = mais escura, como na idade.
+  return [
+    { nome: `Antes de ${ultima - 12}`, cor: "--idade-5", teste: (ano) => ano < ultima - 12 },
+    ...[ultima - 12, ultima - 8, ultima - 4, ultima].map((a, k) => ({
+      nome: faixa(a), cor: `--idade-${4 - k}`, teste: (ano) => ano >= a && ano <= a + 3 })),
+  ];
+}
+
+const COMPOSICAO = {
+  legislatura: {
+    sub: "Matérias no acervo pela legislatura em que foram apresentadas. As de legislaturas anteriores voltaram às comissões depois de desarquivadas.",
+    categorias: (f) => legislaturasDe(f).map((k) => ({ nome: k.nome, cor: k.cor })),
+    atributo: (f) => { const ls = legislaturasDe(f); return (i) => ls.findIndex((k) => k.teste(f.ano[i])); },
+  },
+  tipo: {
+    sub: () => "Matérias no acervo pelo tipo: projetos de lei (PL), de decreto legislativo (PDL), de resolução (PR) e de emenda à Lei Orgânica (PLO)" +
+      (estado.grupo === "projetos" ? "." : ", documentos recebidos (DOCREC) e outros."),
+    categorias: (f) => f.tipos.map((t, k) => ({ nome: t === "Outros" ? "Outros tipos" : t,
+                                                 cor: t === "Outros" ? "--cinza-1" : `--s${k + 1}` })),
+    atributo: (f) => (i) => f.tipo[i],
+  },
+  autoria: {
+    sub: () => "Matérias no acervo pelo primeiro autor. O Executivo é o prefeito." +
+      (estado.grupo === "projetos" ? "" : " Documentos recebidos, requerimentos e outros tipos que não são projetos ficam à parte."),
+    categorias: (f) => f.autorias.map((a) => ({ nome: a,
+      cor: { Vereadores: "--s1", Executivo: "--s2", "Mesa Diretora": "--s3", "Documentos e outros tipos": "--s4" }[a] ?? "--cinza-1" })),
+    atributo: (f) => (i) => f.autoria[i],
+  },
+};
+
+// Quantas passagens de cada categoria estavam no acervo no fim de cada dia de `datas`.
+function composicaoDiaria(f, datas, nCategorias, atributo) {
+  const base = dataParaDia(f, datas[0]);
+  const n = dataParaDia(f, datas[datas.length - 1]) - base + 1;
+  const delta = Array.from({ length: nCategorias }, () => new Int32Array(n + 1));
+  for (const i of passagensDoRecorte(f)) {
+    const k = atributo(i);
+    if (k < 0) continue;
+    const de = f.desde[i] == null ? 0 : Math.max(0, f.desde[i] - base);
+    const ate = f.ate[i] == null ? n : Math.min(n, f.ate[i] - base);
+    if (de >= n || ate <= de) continue;
+    delta[k][de] += 1;
+    delta[k][ate] -= 1;
+  }
+  return delta.map((d) => {
+    let acc = 0;
+    const porDia = Array.from({ length: n }, (_, t) => (acc += d[t]));
+    return datas.map((x) => porDia[dataParaDia(f, x) - base]);
+  });
+}
+
+function renderComposicao(f, j, i0, i1, nomes) {
+  const cartao = document.getElementById("c-composicao");
+  const modo = COMPOSICAO[cartao.dataset.modo] ? cartao.dataset.modo : "legislatura";
+  for (const b of cartao.querySelectorAll(".alternador button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.modo === modo));
+    b.onclick = () => { cartao.dataset.modo = b.dataset.modo; render(); };
+  }
+  const def = COMPOSICAO[modo];
+  document.getElementById("sub-composicao").textContent = typeof def.sub === "function" ? def.sub() : def.sub;
+  const datas = j.datasObj.slice(i0, i1);
+  const categorias = def.categorias(f);
+  const contagens = composicaoDiaria(f, datas, categorias.length, def.atributo(f));
+  const camadas = categorias.map((k, n) => ({ ...k, valores: contagens[n] })).filter((k) => k.valores.some((v) => v));
+  legenda(cartao, camadas);
+  acoes(cartao, datas, camadas, `composicao-${modo}-${estado.comissao.toLowerCase()}-${estado.grupo}.csv`);
+  if (cartao.dataset.tabela === "1") return;
+  graficoEmpilhado(cartao.querySelector(".grafico"), datas, camadas, {
+    altura: 300, inicioColeta: j.inicio_coleta,
+    descricao: `Composição do acervo ${nomes.comissao} por ${modo === "legislatura" ? "legislatura de apresentação" : modo}. ` +
+      resumo(camadas[camadas.length - 1]?.nome ?? "", datas, camadas[camadas.length - 1]?.valores ?? []) });
+}
+
+// Linhas de várias séries, uma em destaque e as outras em cinza, com o nome no fim de cada uma.
+function graficoComparado(alvo, datas, curvas, opcoes) {
+  const c = cores();
+  const largura = alvo.clientWidth;
+  const pontos = (cv) => datas.map((d, i) => ({ d, v: cv.valores[i], g: cv.sigla })).filter((p) => p.v != null);
+  const destaque = curvas.find((cv) => cv.sigla === opcoes.destaque);
+  const referencia = opcoes.destaque === "TODAS" ? null : curvas.find((cv) => cv.sigla === "TODAS");
+  const fundo = curvas.filter((cv) => cv !== destaque && cv.sigla !== "TODAS");
+  const maximo = d3.max(curvas, (cv) => d3.max(cv.valores)) || 1;
+  const m = moldura(c, datas, largura, opcoes.altura, { yDomain: [0, maximo], marginRight: MARGEM_DIREITA });
+  // Nome no fim de cada curva, afastando os que se encostariam.
+  const altura = opcoes.altura - 22 - 26;
+  const topo = d3.scaleLinear().domain([0, maximo]).nice().domain()[1];
+  const rotulos = [destaque, ...(referencia ? [referencia] : []), ...fundo]
+    .map((cv) => ({ ...pontos(cv).pop(), texto: cv.nome, destaque: cv === destaque })).filter((r) => r.v != null)
+    .sort((a, b) => b.v - a.v);
+  let anterior = -Infinity;
+  for (const r of rotulos) {
+    const y = Math.max((1 - r.v / topo) * altura, anterior + 13);
+    r.vr = (1 - y / altura) * topo;
+    anterior = y;
+  }
+  const svg = Plot.plot({
+    ...m.opcoes,
+    marks: [
+      ...m.eixos,
+      Plot.ruleY([100], { stroke: c.tinta3, strokeDasharray: "3 3", strokeOpacity: 0.8 }),
+      ...marcos(datas, c, opcoes.inicioColeta, largura),
+      Plot.line(fundo.flatMap(pontos), { x: "d", y: "v", z: "g", stroke: c.v("--cinza-2"), strokeWidth: 1.25 }),
+      ...(referencia ? [Plot.line(pontos(referencia), { x: "d", y: "v", stroke: c.tinta3, strokeWidth: 1.5, strokeDasharray: "4 3" })] : []),
+      Plot.line(pontos(destaque), { x: "d", y: "v", stroke: c.s1, strokeWidth: 2, strokeLinejoin: "round" }),
+      Plot.text(rotulos.filter((r) => !r.destaque), { x: "d", y: "vr", text: "texto", dx: 6, textAnchor: "start", fontSize: 11, fill: c.tinta3 }),
+      Plot.text(rotulos.filter((r) => r.destaque), { x: "d", y: "vr", text: "texto", dx: 6, textAnchor: "start", fontSize: 11,
+        fill: c.tinta, fontWeight: 600 }),
+    ],
+  });
+  descrever(svg, opcoes.descricao);
+  alvo.replaceChildren(svg);
+  interagir(alvo, svg, datas, (i) => {
+    const outras = [...(referencia ? [referencia] : []), ...fundo].filter((cv) => cv.valores[i] != null)
+      .sort((a, b) => b.valores[i] - a.valores[i]);
+    return {
+      linhas: [
+        ...(destaque.valores[i] != null ? [{ cor: c.s1, valor: fmt(Math.round(destaque.valores[i])), nome: destaque.nome }] : []),
+        ...outras.map((cv) => ({ cor: cv === referencia ? c.tinta3 : c.v("--cinza-2"), valor: fmt(Math.round(cv.valores[i])), nome: cv.nome })),
+      ],
+    };
+  });
+}
+
+function renderBase100(j, i0, i1) {
+  const cartao = document.getElementById("c-base100");
+  const datas = j.datasObj.slice(i0, i1);
+  const curvas = COMISSOES.map(([sigla]) => {
+    const v = j.comissoes[sigla].materias.slice(i0, i1);
+    const base = v.find((x) => x);
+    return { sigla, nome: sigla === "TODAS" ? "Todas" : sigla === "SAUDE" ? "SAÚDE" : sigla,
+             valores: v.map((x) => (x == null || !base ? null : (100 * x) / base)), base };
+  });
+  document.getElementById("sub-base100").textContent =
+    `Tamanho do acervo de cada comissão, com o primeiro dia do período (${dataBR(datas[0])}) valendo 100: ` +
+    "150 é metade a mais; 50, a metade.";
+  const nomeDestaque = estado.comissao === "TODAS" ? "Todas as comissões" : curvas.find((cv) => cv.sigla === estado.comissao).nome;
+  legenda(cartao, [{ nome: nomeDestaque, cor: "--s1", linha: true },
+    ...(estado.comissao === "TODAS" ? [] : [{ nome: "Todas as comissões", cor: "--tinta-3", tracejada: true }]),
+    { nome: estado.comissao === "TODAS" ? "Cada comissão" : "Demais comissões", cor: "--cinza-2", linha: true }]);
+  acoes(cartao, datas, curvas.map((cv) => ({ nome: cv.nome, valores: cv.valores.map((v) => (v == null ? null : Math.round(v))) })),
+        `base100-${estado.grupo}-${estado.periodo}.csv`);
+  if (cartao.dataset.tabela === "1") return;
+  const ultimo = curvas.map((cv) => `${cv.nome} ${fmt(Math.round(cv.valores[cv.valores.length - 1] ?? 0))}`).join(", ");
+  graficoComparado(cartao.querySelector(".grafico"), datas, curvas, {
+    altura: 300, destaque: estado.comissao, inicioColeta: j.inicio_coleta,
+    descricao: `Acervo de cada comissão em base 100 (${dataBR(datas[0])} = 100). No último dia: ${ultimo}.` });
 }
 
 // ----------------------------------------------------------------------------- fluxos
@@ -1206,19 +1363,124 @@ function renderTempos(t, nomes) {
       `${k.nome}: ${serie[k.chave].mediana.map((v, i) => `${t.anos[i]} ${v ?? "—"}`).join(", ")}`).join("; ") + "." });
 }
 
+// Calendário: votações ou passos internos em cada dia de um ano, como no GitHub.
+const DIAS_SEMANA = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
+const DIAS_SEMANA_LONGOS = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira",
+                            "sábado", "domingo"];
+const METRICAS_CALENDARIO = { votos: ["votação", "votações"], passos: ["passo interno", "passos internos"] };
+
+function diasDoCalendario(lista, inicio) {
+  const valores = new Map();
+  let dia = 0;
+  for (let k = 0; k < lista.length; k += 2) {
+    dia += lista[k];
+    valores.set(dataISO(new Date(inicio.getTime() + dia * DIA)), lista[k + 1]);
+  }
+  return valores;
+}
+
+function renderCalendario(t, ultimoDia) {
+  const cartao = document.getElementById("c-calendario");
+  const metrica = cartao.dataset.metrica === "passos" ? "passos" : "votos";
+  for (const b of cartao.querySelectorAll(".alternador button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.metrica === metrica));
+    b.onclick = () => { cartao.dataset.metrica = b.dataset.metrica; renderCalendario(t, ultimoDia); };
+  }
+  const inicio = utc(t.calendario.inicio);
+  const anos = d3.range(ultimoDia.getUTCFullYear(), inicio.getUTCFullYear() - 1, -1);
+  const ano = anos.includes(Number(cartao.dataset.ano)) ? Number(cartao.dataset.ano) : anos[0];
+  const seletor = document.getElementById("f-ano-calendario");
+  preencher(seletor, anos.map((a) => [String(a), String(a)]), String(ano));
+  seletor.onchange = () => { cartao.dataset.ano = seletor.value; renderCalendario(t, ultimoDia); };
+
+  const valores = diasDoCalendario(t.calendario[estado.grupo][estado.comissao][metrica], inicio);
+  const [singular, plural] = METRICAS_CALENDARIO[metrica];
+  const dias = d3.utcDay.range(utc(`${ano}-01-01`), utc(`${ano + 1}-01-01`))
+    .map((d) => ({ d, v: d < inicio || d > ultimoDia ? null : valores.get(dataISO(d)) ?? 0 }));
+  const positivos = dias.filter((x) => x.v > 0).map((x) => x.v);
+  const classes = d3.scaleQuantile().domain(positivos.length ? positivos : [1]).range([1, 2, 3, 4, 5]);
+  const onde = estado.comissao === "TODAS" ? "nas 7 comissões" : `na ${estado.comissao === "SAUDE" ? "SAÚDE" : estado.comissao}`;
+  document.getElementById("sub-calendario").textContent =
+    `${plural[0].toUpperCase()}${plural.slice(1)} ${onde} em cada dia de ${ano}: ${fmt(d3.sum(positivos))} no ano, ` +
+    `em ${fmt(positivos.length)} dias. Os dias de reunião e os recessos aparecem como colunas e faixas.`;
+
+  // Legenda: das faixas de valor, da menor para a maior.
+  const faixas = d3.range(1, 6).map((k) => classes.invertExtent(k)).filter(([a, b]) => a != null && b != null);
+  const legendaCal = cartao.querySelector(".legenda");
+  const itens = [{ nome: "nenhum", cor: null }];
+  let anterior = 0;
+  faixas.forEach(([, b], k) => {
+    const de = anterior + 1;
+    const ate = Math.floor(b);
+    if (ate >= de) itens.push({ nome: de === ate ? fmt(de) : `${fmt(de)} a ${fmt(ate)}`, cor: `--idade-${k + 1}` });
+    anterior = Math.max(anterior, ate);
+  });
+  legendaCal.replaceChildren(...itens.map((k) => {
+    const li = el("li");
+    const amostra = el("span", k.cor ? "amostra" : "amostra vazio-cal");
+    if (k.cor) amostra.style.background = cores().v(k.cor);
+    li.append(amostra, document.createTextNode(k.nome));
+    return li;
+  }));
+
+  acoesTabela(cartao, [{ nome: "data" }, { nome: plural }],
+    dias.filter((x) => x.v != null).map((x) => [dataISO(x.d), x.v]),
+    `calendario-${metrica}-${ano}-${estado.comissao.toLowerCase()}-${estado.grupo}.csv`);
+  const caixa = cartao.querySelector(".calendario");
+  if (cartao.dataset.tabela === "1") return;
+  const primeiraSegunda = d3.utcMonday.floor(utc(`${ano}-01-01`));
+  const semanas = d3.utcMonday.count(primeiraSegunda, utc(`${ano}-12-31`)) + 1;
+  caixa.style.gridTemplateColumns = `28px repeat(${semanas}, minmax(9px, 1fr))`;
+  const filhos = [];
+  for (let mes = 0; mes < 12; mes++) {
+    const d = utc(`${ano}-${String(mes + 1).padStart(2, "0")}-01`);
+    const rotulo = el("span", "mes", MESES[mes]);
+    rotulo.style.gridColumn = String(2 + Math.floor((d - primeiraSegunda) / (7 * DIA)));
+    rotulo.style.gridRow = "1";
+    filhos.push(rotulo);
+  }
+  [0, 2, 4].forEach((k) => {
+    const rotulo = el("span", "dia-semana", DIAS_SEMANA[k]);
+    rotulo.style.gridRow = String(k + 2);
+    rotulo.style.gridColumn = "1";
+    filhos.push(rotulo);
+  });
+  for (const x of dias) {
+    const cel = el("span", "dia");
+    const semana = Math.floor((x.d - primeiraSegunda) / (7 * DIA));
+    const diaSemana = (x.d.getUTCDay() + 6) % 7;
+    cel.style.gridColumn = String(semana + 2);
+    cel.style.gridRow = String(diaSemana + 2);
+    if (x.v == null) {
+      cel.classList.add("fora");
+    } else {
+      const cor = x.v > 0 ? `--idade-${classes(x.v)}` : null;
+      if (cor) cel.style.background = cores().v(cor);
+      cel.dataset.titulo = `${DIAS_SEMANA_LONGOS[diaSemana]}, ${dataBR(x.d)}`;
+      cel.dataset.n = fmt(x.v);
+      cel.dataset.rotulo = x.v === 1 ? singular : plural;
+      cel.dataset.cor = cor ?? "--grade";
+    }
+    filhos.push(cel);
+  }
+  caixa.replaceChildren(...filhos);
+  if (ano === anos[0]) caixa.parentElement.scrollLeft = caixa.parentElement.scrollWidth;
+}
+
 function renderTramitacao(t, nomes, ultimoDia) {
-  const cartoes = ["c-producao", "c-tempos"].map((id) => document.getElementById(id));
+  const cartoes = ["c-producao", "c-tempos", "c-calendario"].map((id) => document.getElementById(id));
   for (const cartao of cartoes) cartao.querySelector(".erro-fluxos")?.remove();
   if (t instanceof Error) {
     for (const cartao of cartoes) cartao.append(el("p", "vazio erro-fluxos", `Erro ao carregar os dados: ${t.message}`));
     return;
   }
   renderProducao(t, nomes, ultimoDia);
+  renderCalendario(t, ultimoDia);
   renderTempos(t, nomes);
 }
 
 function renderFluxos(f, nomes) {
-  const cartoes = ["c-fluxo", "c-permanencia", "c-rotas"].map((id) => document.getElementById(id));
+  const cartoes = ["c-fluxo", "c-permanencia", "c-rotas", "c-composicao"].map((id) => document.getElementById(id));
   for (const cartao of cartoes) cartao.querySelector(".erro-fluxos")?.remove();
   if (f instanceof Error) {
     for (const cartao of cartoes) cartao.append(el("p", "vazio erro-fluxos", `Erro ao carregar os dados: ${f.message}`));
@@ -1229,6 +1491,21 @@ function renderFluxos(f, nomes) {
   renderRotas(f);
 }
 
+
+// Atalhos para os gráficos da aba, na ordem da página (só os visíveis).
+function renderSumario() {
+  const nav = document.getElementById("sumario-evolucao");
+  const cartoes = [...document.querySelectorAll("#painel-evolucao > .cartao")].filter((c) => !c.hidden);
+  nav.replaceChildren(el("span", null, "Nesta aba:"), ...cartoes.map((c) => {
+    const a = el("a", null, c.dataset.curto);
+    a.href = `#${c.id}`;
+    a.addEventListener("click", (ev) => {  // sem mexer no endereço, que guarda os filtros
+      ev.preventDefault();
+      c.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return a;
+  }));
+}
 
 function mostrarErro(texto) {
   let caixa = document.getElementById("erro");
@@ -1954,13 +2231,14 @@ function iniciarRetrato() {
   // Dica dos trechos das barras: valor primeiro, nome depois.
   const dica = document.getElementById("dica-barras");
   document.addEventListener("pointermove", (ev) => {
-    const seg = ev.target.closest?.(".barras .seg");
+    const seg = ev.target.closest?.(".barras .seg, .calendario .dia[data-n]");
     if (!seg) { dica.hidden = true; return; }
     const linha = el("div", "linha");
-    const chave = el("span", "chave");
+    const chave = el("span", "chave quadrado");
     chave.style.background = cores().v(seg.dataset.cor);
     linha.append(chave, el("strong", null, seg.dataset.n), el("span", "nome", seg.dataset.rotulo));
-    dica.replaceChildren(el("p", "data", seg.closest(".barra-linha").querySelector(".barra-nome").title), linha);
+    const titulo = seg.dataset.titulo ?? seg.closest(".barra-linha").querySelector(".barra-nome").title;
+    dica.replaceChildren(el("p", "data", titulo), linha);
     dica.hidden = false;
     const w = dica.offsetWidth;
     const h = dica.offsetHeight;
