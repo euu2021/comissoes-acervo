@@ -712,8 +712,9 @@ function estiloComissao(c, destaque) {
 }
 
 // Linhas das comissões e de "Todas", com um ponto e o nome no fim de cada uma; nomes que se
-// encostariam são afastados na vertical. px e py dão a posição de um ponto {x, y} na tela.
-function marcasComissoes(c, curvas, destaque, pontosDe, px, py) {
+// encostariam são afastados na vertical. px e py dão a posição de um ponto {x, y} na tela;
+// texto(p), o rótulo do fim da linha (o nome da comissão, se omitido).
+function marcasComissoes(c, curvas, destaque, pontosDe, px, py, texto = (p) => rotuloComissao(p.sigla)) {
   const estilo = estiloComissao(c, destaque);
   const peso = (sigla) => (sigla === destaque ? 3 : sigla === "TODAS" ? 2 : destaque === "TODAS" ? 1 : 0);
   const ordem = [...curvas].sort((a, b) => peso(a.sigla) - peso(b.sigla));
@@ -735,20 +736,21 @@ function marcasComissoes(c, curvas, destaque, pontosDe, px, py) {
       const e = estilo(p.sigla);
       return Plot.dot([p], { x: "x", y: "y", r: 3, fill: e.cor, fillOpacity: e.opacidade, stroke: c.superficie, strokeWidth: 1 });
     }),
-    ...fins.map((p) => Plot.text([p], { x: "x", y: "y", dx: 7, dy: p.dy, text: () => rotuloComissao(p.sigla), textAnchor: "start",
+    ...fins.map((p) => Plot.text([p], { x: "x", y: "y", dx: 7, dy: p.dy, text: () => texto(p), textAnchor: "start",
       fontSize: 11, fill: p.sigla === destaque ? c.tinta : c.tinta2, fontWeight: p.sigla === destaque ? 600 : 400 })),
   ];
 }
 
 // Dica com o valor de cada comissão num ponto: a escolhida primeiro, as outras do maior ao menor.
-function linhasDaDica(c, curvas, destaque, valor, formato) {
+// detalhe(cv), se dado, vai depois do nome.
+function linhasDaDica(c, curvas, destaque, valor, formato, detalhe = () => "") {
   const estilo = estiloComissao(c, destaque);
   const nome = (s) => (s === "TODAS" ? "todas as comissões" : rotuloComissao(s));
   const presentes = curvas.filter((cv) => valor(cv) != null);
   const escolhida = presentes.find((cv) => cv.sigla === destaque);
   const outras = presentes.filter((cv) => cv !== escolhida).sort((a, b) => valor(b) - valor(a));
   return [...(escolhida ? [escolhida] : []), ...outras]
-    .map((cv) => ({ cor: estilo(cv.sigla).cor, valor: formato(valor(cv)), nome: nome(cv.sigla) }));
+    .map((cv) => ({ cor: estilo(cv.sigla).cor, valor: formato(valor(cv)), nome: `${nome(cv.sigla)} ${detalhe(cv)}`.trim() }));
 }
 
 function legendaComissoes(cartao) {
@@ -761,6 +763,8 @@ function graficoComparado(alvo, datas, curvas, opcoes) {
   const largura = alvo.clientWidth;
   const maximo = d3.max(curvas, (cv) => d3.max(cv.valores)) || 1;
   const m = moldura(c, datas, largura, opcoes.altura, { yDomain: [0, maximo], marginRight: MARGEM_DIREITA });
+  m.eixos[1] = Plot.axisY({ ticks: 5, tickSize: 0, tickPadding: 6, tickFormat: (v) => `${numero.format(v)}%`,
+                            fill: c.tinta3, label: null });
   const topo = d3.scaleLinear().domain([0, maximo]).nice().domain()[1];
   const [d0, d1] = [datas[0], datas[datas.length - 1]];
   const px = (p) => ((p.x - d0) / (d1 - d0)) * (largura - 48 - MARGEM_DIREITA);
@@ -772,13 +776,15 @@ function graficoComparado(alvo, datas, curvas, opcoes) {
       ...m.eixos,
       Plot.ruleY([100], { stroke: c.tinta3, strokeDasharray: "3 3", strokeOpacity: 0.8 }),
       ...marcos(datas, c, opcoes.inicioColeta, largura),
-      ...marcasComissoes(c, curvas, opcoes.destaque, pontosDe, px, py),
+      ...marcasComissoes(c, curvas, opcoes.destaque, pontosDe, px, py,
+                         (p) => `${rotuloComissao(p.sigla)} ${numero.format(Math.round(p.y))}%`),
     ],
   });
   descrever(svg, opcoes.descricao);
   alvo.replaceChildren(svg);
   interagir(alvo, svg, datas, (i) => ({
-    linhas: linhasDaDica(c, curvas, opcoes.destaque, (cv) => cv.valores[i], (v) => fmt(Math.round(v))),
+    linhas: linhasDaDica(c, curvas, opcoes.destaque, (cv) => cv.valores[i], (v) => `${numero.format(Math.round(v))}%`,
+                         (cv) => `· ${fmt(cv.brutos[i])} (eram ${fmt(cv.base)})`),
   }));
 }
 
@@ -786,22 +792,36 @@ function renderBase100(j, i0, i1) {
   const cartao = document.getElementById("c-base100");
   const datas = j.datasObj.slice(i0, i1);
   const curvas = COMISSOES.map(([sigla]) => {
-    const v = j.comissoes[sigla].materias.slice(i0, i1);
-    const base = v.find((x) => x);
-    return { sigla, nome: sigla === "TODAS" ? "Todas" : sigla === "SAUDE" ? "SAÚDE" : sigla,
-             valores: v.map((x) => (x == null || !base ? null : (100 * x) / base)), base };
+    const brutos = j.comissoes[sigla].materias.slice(i0, i1);
+    const base = brutos.find((x) => x);
+    return { sigla, nome: rotuloComissao(sigla), brutos, base,
+             valores: brutos.map((x) => (x == null || !base ? null : (100 * x) / base)) };
   });
+  // Exemplo com a comissão escolhida (ou as 7 juntas), para dar sentido à porcentagem.
+  const ex = curvas.find((cv) => cv.sigla === estado.comissao);
+  const final = ex.brutos[ex.brutos.length - 1];
+  const r = final / ex.base;
+  const comparacao = r >= 3 ? `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(r)} vezes o tamanho daquele dia`
+    : r > 2.05 ? "mais que o dobro" : r >= 1.95 ? "o dobro"
+    : r > 1.05 ? `${Math.round((r - 1) * 100)}% maior` : r >= 0.95 ? "praticamente o mesmo tamanho"
+    : `${Math.round((1 - r) * 100)}% menor`;
+  const unidade = estado.grupo === "projetos" ? "projetos" : "matérias";
+  const [quem, tinha, tem, esta] = estado.comissao === "TODAS"
+    ? ["As 7 comissões juntas", "tinham", "têm", "estão"] : [`A ${ex.nome}`, "tinha", "tem", "está"];
   document.getElementById("sub-base100").textContent =
-    `Tamanho do acervo de cada comissão, com o primeiro dia do período (${dataBR(datas[0])}) valendo 100: ` +
-    "150 é metade a mais; 50, a metade.";
+    "Para comparar comissões de tamanhos muito diferentes, cada linha mostra o acervo de uma comissão como " +
+    `porcentagem do tamanho que ela tinha em ${dataBR(datas[0])}, o primeiro dia do período: 100% é o mesmo tamanho; ` +
+    `200%, o dobro; 50%, a metade. ${quem} ${tinha} ${fmt(ex.base)} ${unidade} naquele dia e ${tem} ${fmt(final)} ` +
+    `em ${dataBR(datas[datas.length - 1])}: ${esta} em ${numero.format(Math.round(100 * r))}%, ${comparacao}.`;
   legendaComissoes(cartao);
-  acoes(cartao, datas, curvas.map((cv) => ({ nome: cv.nome, valores: cv.valores.map((v) => (v == null ? null : Math.round(v))) })),
-        `base100-${estado.grupo}-${estado.periodo}.csv`);
+  acoes(cartao, datas, curvas.map((cv) => ({ nome: `${cv.nome} (% de ${dataBR(datas[0])})`,
+                                             valores: cv.valores.map((v) => (v == null ? null : Math.round(v))) })),
+        `crescimento-${estado.grupo}-${estado.periodo}.csv`);
   if (cartao.dataset.tabela === "1") return;
-  const ultimo = curvas.map((cv) => `${cv.nome} ${fmt(Math.round(cv.valores[cv.valores.length - 1] ?? 0))}`).join(", ");
+  const ultimo = curvas.map((cv) => `${cv.nome} ${fmt(Math.round(cv.valores[cv.valores.length - 1] ?? 0))}%`).join(", ");
   graficoComparado(cartao.querySelector(".grafico"), datas, curvas, {
     altura: 300, destaque: estado.comissao, inicioColeta: j.inicio_coleta,
-    descricao: `Acervo de cada comissão em base 100 (${dataBR(datas[0])} = 100). No último dia: ${ultimo}.` });
+    descricao: `Acervo de cada comissão como porcentagem do tamanho em ${dataBR(datas[0])}. No último dia: ${ultimo}.` });
 }
 
 // ----------------------------------------------------------------------------- fluxos
