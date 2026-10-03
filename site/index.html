@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acervo das Comissões — CMSP</title>
+  <meta name="description" content="Evolução diária das matérias em análise nas 7 Comissões Permanentes da Câmara Municipal de São Paulo, desde novembro de 2018.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M7 23V15M13 23V10M19 23V13M25 23V7' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="estilo.css?v=dev">
+  <script>
+    try { const t = localStorage.getItem("tema"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+<div class="pagina">
+  <header class="topo">
+    <div>
+      <p class="sobretitulo">Dados públicos do SPLEGIS</p>
+      <h1>Acervo das Comissões</h1>
+      <p class="lead">Quantas matérias esperam análise nas 7 Comissões Permanentes da Câmara Municipal de São Paulo, há quanto tempo e em que passo da tramitação estão, dia a dia, desde novembro de 2018.</p>
+    </div>
+    <p class="atualizacao" id="atualizacao"></p>
+  </header>
+
+  <nav class="filtros" aria-label="Filtros do painel">
+    <label>Período <select id="f-periodo"></select></label>
+    <label>Comissão <select id="f-comissao"></select></label>
+    <label>Matérias <select id="f-grupo"></select></label>
+    <button class="botao tema" id="tema" type="button" aria-label="Alternar tema"></button>
+  </nav>
+
+  <main id="conteudo" aria-live="polite">
+    <section class="kpis" id="kpis" aria-label="Números do último dia"></section>
+
+    <figure class="cartao" id="c-acervo">
+      <div class="cartao-topo">
+        <div>
+          <h2>Tamanho do acervo</h2>
+          <p class="sub" id="sub-acervo"></p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico">As quedas de janeiro de 2021 e de 2025 vêm do fim de legislatura: as proposições em tramitação são arquivadas e voltam às comissões à medida que são desarquivadas.</p>
+    </figure>
+
+    <figure class="cartao" id="c-comissoes">
+      <div class="cartao-topo">
+        <div>
+          <h2>Por comissão</h2>
+          <p class="sub">Cada painel tem sua própria escala. Clique para ver uma comissão em detalhe.</p>
+        </div>
+      </div>
+      <div class="multiplos"></div>
+    </figure>
+
+    <figure class="cartao" id="c-idade">
+      <div class="cartao-topo">
+        <div>
+          <h2>Há quanto tempo estão na comissão</h2>
+          <p class="sub">Matérias do acervo por dias completos desde o recebimento pela comissão.</p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+    </figure>
+
+    <figure class="cartao" id="c-mediana">
+      <div class="cartao-topo">
+        <div>
+          <h2>Idade mediana</h2>
+          <p class="sub">Metade das matérias recebidas está na comissão há menos dias que isso, metade há mais.</p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <div class="grafico" tabindex="0"></div>
+    </figure>
+
+    <figure class="cartao" id="c-passo">
+      <div class="cartao-topo">
+        <div>
+          <h2>Em que passo da tramitação interna estão</h2>
+          <p class="sub">Área do último passo interno de cada matéria na comissão.</p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+    </figure>
+  </main>
+
+  <div class="sobre">
+    <section>
+      <h2>De onde vêm os dados</h2>
+      <p>Do SPLEGIS, o sistema do processo legislativo da Câmara. Desde 2 de outubro de 2026, um robô copia todo dia o relatório <a href="https://splegisconsulta.saopaulo.sp.leg.br/Relatorio/IndexComissaoProjetoTramitacaoInterna">Projetos em Análise nas Comissões</a>. O período anterior, desde novembro de 2018, foi reconstruído a partir dos eventos de tramitação que o SPLEGIS registra dia a dia e conferido contra o histórico oficial das matérias (<a href="https://github.com/euu2021/comissoes-acervo/blob/main/dados/reconstrucao/README.md">método e validação</a>).</p>
+    </section>
+    <section>
+      <h2>Como ler</h2>
+      <ul>
+        <li>Uma matéria entra no acervo quando é enviada à comissão e sai quando a comissão a envia adiante. Enviadas e ainda não recebidas contam como "aguardando recebimento".</li>
+        <li>A idade conta dias completos desde o recebimento; ao voltar a uma comissão, a matéria recomeça a contagem.</li>
+        <li>Quem é o relator só se sabe pelos retratos diários; na reconstrução não há essa informação.</li>
+      </ul>
+    </section>
+    <section>
+      <h2>Dados abertos</h2>
+      <p>Todos os números estão no <a href="https://github.com/euu2021/comissoes-acervo">repositório no GitHub</a>, em CSV: o retrato de cada dia, o histórico em intervalos e a série reconstruída. O código é aberto, sob a licença MIT.</p>
+    </section>
+  </div>
+
+  <footer class="rodape">
+    <p>Código e dados no <a href="https://github.com/euu2021/comissoes-acervo">GitHub</a>. Gráficos feitos com <a href="https://observablehq.com/plot/">Observable Plot</a>.</p>
+  </footer>
+</div>
+
+<script src="vendor/d3.min.js"></script>
+<script src="vendor/plot.umd.min.js"></script>
+<script src="app.js?v=dev"></script>
+</body>
+</html>

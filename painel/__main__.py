@@ -1,0 +1,88 @@
+# -*- coding: utf-8 -*-
+"""
+Gera os dados do painel em site/dados/ a partir de dados/:
+
+- até a primeira coleta, a série reconstruída (dados/reconstrucao/serie.csv);
+- dali em diante, a série dos retratos reais (dados/historico.csv), calculada com a
+  mesma agregação da reconstrução e mais a contagem de matérias sem relator.
+
+Grava um arquivo por grupo (serie-projetos.json e serie-todas.json), em colunas:
+uma lista de datas e, para cada comissão (e TODAS), uma lista por métrica.
+
+Uso (da raiz do repositório):  python -m painel
+"""
+from __future__ import annotations
+
+import json
+import sys
+from datetime import datetime
+
+from coletor import config as C
+from coletor.util import ler_csv, log
+from reconstrucao import serie as S
+
+SAIDA = C.RAIZ / "site" / "dados"
+METRICAS = [*S.CAMPOS[3:], "sem_relator"]
+
+
+def serie_real(coletas: list[dict], historico: list[dict]) -> list[dict]:
+    """Uma linha por dia de coleta × comissão (mais TODAS) × grupo, a partir dos intervalos."""
+    instantes = {c["data"]: c["coletado_em"] for c in coletas}
+    linhas_hist = sorted(historico, key=lambda h: h["desde"])
+    comissoes = sorted(C.COMISSOES)
+    linhas, proxima, ativas = [], 0, []
+    for dia in sorted(instantes):
+        # A idade é contada no instante da coleta, como o SPLEGIS faz no relatório.
+        instante = datetime.fromisoformat(instantes[dia]).replace(tzinfo=None)
+        while proxima < len(linhas_hist) and linhas_hist[proxima]["desde"] <= dia:
+            ativas.append(linhas_hist[proxima])
+            proxima += 1
+        ativas = [h for h in ativas if not h["ate"] or dia <= h["ate"]]
+        itens = []
+        for h in ativas:
+            recebido = datetime.fromisoformat(h["recebido_em"]) if h["recebido_em"] else None
+            faixa, dias = S.idade(recebido, instante)
+            itens.append((h["comissao"], h["rotulo"].split()[0] in S.PROJETOS, faixa, dias,
+                          S.categoria(h["interna_area"]), not h["relator_codigo"]))
+        linhas += S.agregar(dia, itens, comissoes, com_relator=True)
+    return linhas
+
+
+def colunas(linhas: list[dict], grupo: str) -> tuple[list[str], dict]:
+    datas = sorted({l["data"] for l in linhas})
+    pos = {d: i for i, d in enumerate(datas)}
+    comissoes: dict[str, dict] = {}
+    for l in linhas:
+        if l["grupo"] != grupo:
+            continue
+        serie = comissoes.setdefault(l["comissao"], {m: [None] * len(datas) for m in METRICAS})
+        for m in METRICAS:
+            valor = l.get(m, "")
+            serie[m][pos[l["data"]]] = int(valor) if valor != "" else None
+    return datas, comissoes
+
+
+def main() -> int:
+    coletas = ler_csv(C.ARQ_COLETAS)
+    reais = serie_real(coletas, ler_csv(C.ARQ_HISTORICO))
+    inicio_coleta = min(l["data"] for l in reais)
+    reconstruida = [l for l in ler_csv(C.DIR_DADOS / "reconstrucao" / "serie.csv")
+                    if l["data"] < inicio_coleta]
+    linhas = reconstruida + reais
+    ultima = max(coletas, key=lambda c: c["coletado_em"])
+
+    SAIDA.mkdir(parents=True, exist_ok=True)
+    for grupo in ("projetos", "todas"):
+        datas, comissoes = colunas(linhas, grupo)
+        conteudo = {"grupo": grupo, "inicio_coleta": inicio_coleta,
+                    "atualizado_em": ultima["coletado_em"], "datas": datas, "comissoes": comissoes}
+        arquivo = SAIDA / f"serie-{grupo}.json"
+        arquivo.write_text(json.dumps(conteudo, ensure_ascii=False, separators=(",", ":")),
+                           encoding="utf-8")
+        log(f"{arquivo.name}: {len(datas)} dias, {arquivo.stat().st_size / 1e6:.1f} MB")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.exit(main())

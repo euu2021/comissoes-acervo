@@ -5,3 +5,4 @@ __pycache__/
 .playwright-mcp/
 proxy.local.json
 reconstrucao/cache/
+site/dados/

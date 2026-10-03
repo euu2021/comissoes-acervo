@@ -4,7 +4,9 @@ Série histórica do acervo das 7 Comissões Permanentes da Câmara Municipal de
 
 O SPLEGIS mostra só o retrato do momento. Este repositório tira um retrato por dia e guarda a evolução, para responder perguntas como "o acervo da CCJ está crescendo ou diminuindo?" ou "quanto tempo as matérias passaram sem relator ao longo do ano?".
 
-**Situação:** coleta diária automática desde 02/10/2026, mais uma reconstrução do acervo de novembro de 2018 até essa data. O site no GitHub Pages ainda está em construção.
+**Painel:** https://euu2021.github.io/comissoes-acervo/
+
+**Situação:** coleta diária automática desde 02/10/2026, mais uma reconstrução do acervo de novembro de 2018 até essa data.
 
 ## Como funciona
 
@@ -76,7 +78,12 @@ python -m unittest                     # testes
 
 python -m reconstrucao baixar --inicio 2018-10-26 --fim 2026-10-02  # feed de eventos (cache)
 python -m reconstrucao gerar                                        # refaz dados/reconstrucao/
+
+python -m painel                    # gera site/dados/ a partir de dados/
+python -m http.server -d site 8000  # abre o painel em http://localhost:8000
 ```
+
+O painel ([`site/`](site/)) é publicado no GitHub Pages pelo workflow [`painel.yml`](.github/workflows/painel.yml), a cada push e depois de cada coleta. Ele junta a série reconstruída com a dos retratos reais, calculada com a mesma regra, e usa [Observable Plot](https://observablehq.com/plot/) e [D3](https://d3js.org/) (licença ISC, copiados em `site/vendor/`).
 
 Se o SPLEGIS bloquear o acesso a partir do GitHub, o coletor respeita as variáveis de ambiente `HTTPS_PROXY`/`HTTP_PROXY`. Basta defini-las no workflow a partir de um secret.
 
