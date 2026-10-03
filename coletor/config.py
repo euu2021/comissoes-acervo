@@ -50,4 +50,4 @@ QUEDA_MAXIMA = 0.5
 QUEDA_PISO = 20          # comissões com menos matérias que isso não são checadas
 
 USER_AGENT = ("Mozilla/5.0 (compatible; comissoes-acervo/1.0; "
-              "+https://github.com/euu2021/comissoes-acervo)")
+              "+https://github.com/prototiposlegisla/comissoes-acervo)")

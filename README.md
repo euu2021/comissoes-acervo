@@ -4,7 +4,7 @@ Série histórica do acervo das 7 Comissões Permanentes da Câmara Municipal de
 
 O SPLEGIS mostra só o retrato do momento. Este repositório tira um retrato por dia e guarda a evolução, para responder perguntas como "o acervo da CCJ está crescendo ou diminuindo?" ou "quanto tempo as matérias passaram sem relator ao longo do ano?".
 
-**Painel:** https://euu2021.github.io/comissoes-acervo/
+**Painel:** https://prototiposlegisla.github.io/comissoes-acervo/
 
 **Situação:** coleta diária automática desde 02/10/2026, mais uma reconstrução do acervo de novembro de 2018 até essa data.
 
