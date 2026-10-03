@@ -220,8 +220,8 @@ h1 { margin: 4px 0 8px; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; le
 .abas { display: flex; gap: 4px; border-bottom: 1px solid var(--borda); }
 .abas { gap: 6px; }
 .abas button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font: inherit; text-align: left;
-  padding: 12px 20px 11px; margin-bottom: -1px; border: 1px solid transparent; border-bottom: 0;
-  border-radius: 12px 12px 0 0; background: none; color: var(--tinta-2); cursor: pointer; }
+  padding: 12px 20px 11px; margin-bottom: -1px; border: 1px solid var(--base); border-bottom: 0;
+  border-radius: 12px 12px 0 0; background: var(--superficie); color: var(--tinta-2); cursor: pointer; }
 .abas .aba-titulo { font-size: 20px; font-weight: 700; line-height: 1.2; }
 .abas .aba-sub { font-size: 12px; color: var(--tinta-3); }
 .abas button:hover { color: var(--tinta); background: var(--realce); }
