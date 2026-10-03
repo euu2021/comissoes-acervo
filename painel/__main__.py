@@ -129,7 +129,7 @@ def main() -> int:
                                   ler_csv(C.DIR_DADOS / "projetos_por_ano.csv"), max(c["data"] for c in coletas),
                                   ler_csv(C.DIR_DADOS / "filiacoes.csv"), ler_csv(C.DIR_DADOS / "cargos_comissoes.csv"),
                                   ler_csv(C.DIR_DADOS / "assuntos.csv"), lista)
-    eventos = [{"data": e["data"], "texto": e["texto"]} for e in ler_csv(C.DIR_DADOS / "eventos.csv")]
+    eventos = [{"data": e["data"], "texto": e["texto"], "descricao": e["descricao"]} for e in ler_csv(C.DIR_DADOS / "eventos.csv")]
     (SAIDA / "eventos.json").write_text(json.dumps(eventos, ensure_ascii=False), encoding="utf-8")
     arquivo = SAIDA / "legislativo.json"
     arquivo.write_text(json.dumps(conteudo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

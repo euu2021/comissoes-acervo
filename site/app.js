@@ -147,31 +147,43 @@ function eixoX(datas, largura) {
            tickFormat: (d) => `${MESES[d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}` };
 }
 
+const MEDIR_MARCO = document.createElement("canvas").getContext("2d");
+
 function marcos(datas, c, inicioColeta, largura) {
   const [d0, d1] = [datas[0], datas[datas.length - 1]];
   const lista = LEGISLATURAS.map((iso) => ({ d: utc(iso), texto: "nova legislatura" }));
   lista.unshift({ d: utc(inicioColeta), texto: "início da coleta diária" });  // o primeiro a ganhar texto
   // Eventos de dados/eventos.csv (pandemia, eleições...), em linha pontilhada e com menos prioridade.
-  for (const ev of cache.eventos ?? []) lista.push({ d: utc(ev.data), texto: ev.texto, evento: true });
+  for (const ev of cache.eventos ?? []) lista.push({ d: utc(ev.data), texto: ev.texto, descricao: ev.descricao, evento: true });
   const visiveis = lista.filter((m) => m.d > d0 && m.d <= d1);
-  // Em telas estreitas os textos se encostam: fica só a linha do marco que não cabe.
+  // O texto vai à direita da linha (à esquerda no fim do eixo) ou, se não couber, do outro lado.
+  // Não pode encostar em outro texto nem atravessar outra linha, para não parecer que é dela: em
+  // telas estreitas, fica só a linha do marco que não cabe.
   const util = largura - 48 - MARGEM_DIREITA;
+  for (const m of visiveis) m.px = ((m.d - d0) / (d1 - d0)) * util;
+  MEDIR_MARCO.font = "11px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
   const ocupados = [];
   for (const m of visiveis) {
-    const px = ((m.d - d0) / (d1 - d0)) * util;
-    m.perto = (d1 - m.d) / (d1 - d0) < 0.15;  // texto à esquerda da linha, no fim do eixo
-    const w = m.texto.length * 5.8 + 8;
-    const [a, b] = m.perto ? [px - w, px] : [px, px + w];
-    m.rotulado = !ocupados.some(([x0, x1]) => a < x1 && b > x0);
-    if (m.rotulado) ocupados.push([a, b]);
+    const w = MEDIR_MARCO.measureText(m.texto).width + 10;
+    const fimDoEixo = (d1 - m.d) / (d1 - d0) < 0.15;
+    const lados = fimDoEixo ? ["esquerda", "direita"] : ["direita", "esquerda"];
+    m.lado = lados.find((lado) => {
+      const [a, b] = lado === "esquerda" ? [m.px - w, m.px] : [m.px, m.px + w];
+      if (a < -40 || b > util + MARGEM_DIREITA) return false;
+      if (ocupados.some(([x0, x1]) => a < x1 && b > x0)) return false;
+      if (visiveis.some((o) => o !== m && o.px > a - 2 && o.px < b + 2)) return false;
+      ocupados.push([a, b]);
+      return true;
+    });
   }
-  const comTexto = visiveis.filter((m) => m.rotulado);
+  const comTexto = visiveis.filter((m) => m.lado);
   return [
     Plot.ruleX(visiveis.filter((m) => !m.evento), { x: "d", stroke: c.tinta3, strokeOpacity: 0.7 }),
-    Plot.ruleX(visiveis.filter((m) => m.evento), { x: "d", stroke: c.tinta3, strokeOpacity: 0.7, strokeDasharray: "2 3" }),
-    Plot.text(comTexto.filter((m) => !m.perto), { x: "d", text: "texto", frameAnchor: "top",
+    Plot.ruleX(visiveis.filter((m) => m.evento), { x: "d", stroke: c.tinta3, strokeOpacity: 0.7, strokeDasharray: "2 3",
+      title: (m) => `${dataBR(m.d)}: ${m.descricao || m.texto}` }),
+    Plot.text(comTexto.filter((m) => m.lado === "direita"), { x: "d", text: "texto", frameAnchor: "top",
       textAnchor: "start", dx: 4, dy: -12, fill: c.tinta2, fontSize: 11 }),
-    Plot.text(comTexto.filter((m) => m.perto), { x: "d", text: "texto", frameAnchor: "top",
+    Plot.text(comTexto.filter((m) => m.lado === "esquerda"), { x: "d", text: "texto", frameAnchor: "top",
       textAnchor: "end", dx: -4, dy: -12, fill: c.tinta2, fontSize: 11 }),
   ];
 }
