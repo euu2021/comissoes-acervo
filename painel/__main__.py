@@ -8,7 +8,9 @@ Gera os dados do painel em site/dados/ a partir de dados/:
 
 Grava um arquivo por grupo (serie-projetos.json e serie-todas.json), em colunas:
 uma lista de datas e, para cada comissão (e TODAS), uma lista por métrica. Grava também
-o retrato do dia (retrato.json), matéria a matéria, para as visões do retrato atual.
+o retrato do dia (retrato.json), matéria a matéria, para as visões do retrato atual, e
+as passagens das matérias pelas comissões (fluxos.json), para os gráficos de entradas e
+saídas, permanência e rotas (ver fluxos.py).
 
 Uso (da raiz do repositório):  python -m painel
 """
@@ -21,7 +23,7 @@ from datetime import datetime
 
 from coletor import config as C
 from coletor.util import ler_csv, log
-from painel import retrato
+from painel import fluxos, retrato
 from reconstrucao import serie as S
 
 SAIDA = C.RAIZ / "site" / "dados"
@@ -75,7 +77,8 @@ def colunas(linhas: list[dict], grupo: str) -> tuple[list[str], dict]:
 
 def main() -> int:
     coletas = ler_csv(C.ARQ_COLETAS)
-    reais = serie_real(coletas, ler_csv(C.ARQ_HISTORICO))
+    historico = ler_csv(C.ARQ_HISTORICO)
+    reais = serie_real(coletas, historico)
     inicio_coleta = min(l["data"] for l in reais)
     reconstruida = [l for l in ler_csv(C.DIR_DADOS / "reconstrucao" / "serie.csv")
                     if l["data"] < inicio_coleta]
@@ -97,6 +100,13 @@ def main() -> int:
     arquivo = SAIDA / "retrato.json"
     arquivo.write_text(json.dumps(conteudo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     log(f"{arquivo.name}: {len(conteudo['materias'])} matérias, {arquivo.stat().st_size / 1e6:.1f} MB")
+
+    lista = fluxos.passagens(ler_csv(C.DIR_DADOS / "reconstrucao" / "presencas.csv"), historico,
+                             coletas, ler_csv(C.ARQ_TRAMITACOES))
+    conteudo = fluxos.montar(lista, max(c["data"] for c in coletas), inicio_coleta, ultima["coletado_em"])
+    arquivo = SAIDA / "fluxos.json"
+    arquivo.write_text(json.dumps(conteudo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    log(f"{arquivo.name}: {len(lista)} passagens, {arquivo.stat().st_size / 1e6:.1f} MB")
     return 0
 
 

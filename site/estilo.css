@@ -148,6 +148,8 @@ h1 { margin: 4px 0 8px; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; le
   font-size: 13px; color: var(--tinta-2); }
 .legenda li { display: flex; align-items: center; gap: 6px; }
 .legenda .amostra { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.legenda .amostra.linha { width: 16px; height: 3px; border-radius: 2px; }
+.legenda .amostra.tracejada { width: 16px; height: 0; border-top: 2px dashed; border-radius: 0; }
 .grafico { position: relative; margin-top: 8px; border-radius: 8px; }
 .grafico svg { display: block; max-width: 100%; height: auto; overflow: visible; }
 .nota-grafico { margin: 8px 0 0; font-size: 13px; color: var(--tinta-3); }
@@ -160,9 +162,13 @@ h1 { margin: 4px 0 8px; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; le
 .dica .data { margin: 0 0 4px; color: var(--tinta-2); font-size: 12px; }
 .dica .linha { display: flex; align-items: center; gap: 8px; line-height: 1.6; }
 .dica .chave { width: 12px; height: 2px; border-radius: 1px; flex: none; }
+.dica .chave.quadrado { width: 10px; height: 10px; border-radius: 2px; }
 .dica strong { font-variant-numeric: tabular-nums; min-width: 3.5ch; text-align: right; }
 .dica .nome { color: var(--tinta-2); }
 .dica .total { border-top: 1px solid var(--grade); margin-top: 4px; padding-top: 4px; }
+.dica .total + .total { border-top: 0; margin-top: 0; padding-top: 0; }
+.dica .secao { margin: 6px 0 0; font-size: 12px; font-weight: 600; color: var(--tinta-2); }
+.dica .data + .secao { margin-top: 0; }
 
 /* pequenos múltiplos */
 .multiplos { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin-top: 12px; }
@@ -337,6 +343,21 @@ h1 { margin: 4px 0 8px; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; le
 .janela .fechar { font-size: 18px; line-height: 1; padding: 4px 12px; }
 .janela .tabela { max-height: calc(100vh - 270px); }
 .lista td.autores { min-width: 180px; }
+
+/* matriz de rotas */
+.matriz-caixa { margin-top: 12px; overflow-x: auto; }
+.matriz { border-collapse: separate; border-spacing: 2px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.matriz th { padding: 4px 6px; color: var(--tinta-2); font-weight: 600; white-space: nowrap; }
+.matriz thead th { font-size: 12px; text-align: center; vertical-align: bottom; }
+.matriz thead th:first-child { text-align: left; font-weight: 400; color: var(--tinta-3); }
+.matriz tbody th { text-align: left; }
+.matriz tbody th, .matriz thead th:first-child { position: sticky; left: 0; z-index: 1; background: var(--superficie); }
+.matriz td { min-width: 46px; height: 32px; padding: 0 6px; text-align: center; border-radius: 4px; }
+.matriz td.vazia { color: var(--tinta-3); }
+.matriz .total { text-align: right; color: var(--tinta-2); font-weight: 600; padding-left: 10px; }
+.matriz.com-selecao tbody tr:not(.selecionada) > td { opacity: 0.45; }
+.matriz.com-selecao tbody tr:not(.selecionada) > th { color: var(--tinta-3); }
+.matriz tr.selecionada th { color: var(--tinta); box-shadow: inset 3px 0 0 var(--s1); }
 
 /* passos da metodologia */
 .passos { margin: 8px 0 0; padding-left: 20px; }

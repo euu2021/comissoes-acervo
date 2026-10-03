@@ -23,6 +23,7 @@ CAMPOS_HISTORICO = ["comissao", "materia_id", "desde", "ate", *CAMPOS_ESTADO]
 CAMPOS_MATERIAS = ["materia_id", "rotulo", "tipo", "numero", "ano", "ementa"]
 CAMPOS_AUTORIAS = ["materia_id", "ordem", "autor_codigo", "autor", "classe"]
 CAMPOS_COLETAS = ["data", "coletado_em", "comissao", "materias"]
+CAMPOS_TRAMITACOES = ["data", "rotulo", "tipo", "de", "para"]
 
 
 def num(valor: str) -> int:

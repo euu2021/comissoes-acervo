@@ -196,6 +196,19 @@
       <p class="nota-grafico">As quedas de janeiro de 2021 e de 2025 vêm do fim de legislatura: as proposições em tramitação são arquivadas e voltam às comissões à medida que são desarquivadas.</p>
     </figure>
 
+    <figure class="cartao" id="c-fluxo">
+      <div class="cartao-topo">
+        <div>
+          <h2>Entradas e saídas</h2>
+          <p class="sub" id="sub-fluxo"></p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico">A matéria entra no acervo quando é enviada à comissão e sai quando é enviada a outra área. A Secretaria Geral Parlamentar reúne as equipes da SGP (como SGP-12, SGP-21 e SGP-23), por onde as matérias seguem depois das comissões. O período em curso aparece mais claro, porque ainda não terminou.</p>
+    </figure>
+
     <figure class="cartao" id="c-comissoes">
       <div class="cartao-topo">
         <div>
@@ -229,6 +242,19 @@
       <div class="grafico" tabindex="0"></div>
     </figure>
 
+    <figure class="cartao" id="c-permanencia">
+      <div class="cartao-topo">
+        <div>
+          <h2>Quanto tempo as matérias ficam na comissão</h2>
+          <p class="sub" id="sub-permanencia"></p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico">Conta do envio à comissão até a saída; a matéria que passa duas vezes pela mesma comissão conta duas passagens. As que ainda estão no acervo e as arquivadas no fim da legislatura (janeiro de 2021 e de 2025) entram na conta só até onde foram acompanhadas (método de Kaplan-Meier). Cada curva para quando restam menos de 30 passagens em acompanhamento.</p>
+    </figure>
+
     <figure class="cartao" id="c-passo">
       <div class="cartao-topo">
         <div>
@@ -239,6 +265,23 @@
       </div>
       <ul class="legenda"></ul>
       <div class="grafico" tabindex="0"></div>
+    </figure>
+
+    <figure class="cartao" id="c-rotas">
+      <div class="cartao-topo">
+        <div>
+          <h2>Para onde vão as matérias que saem de cada comissão</h2>
+          <p class="sub" id="sub-rotas"></p>
+        </div>
+        <div class="controles">
+          <div class="alternador" role="group" aria-label="Mostrar">
+            <button type="button" data-modo="percentual">Percentual</button><button type="button" data-modo="contagem">Contagem</button>
+          </div>
+          <div class="acoes acoes-csv"></div>
+        </div>
+      </div>
+      <div class="matriz-caixa"></div>
+      <p class="nota-grafico">Mostra as 7 comissões qualquer que seja o filtro, que só destaca a linha da escolhida. Passe o mouse sobre uma célula para ver o número de matérias.</p>
     </figure>
     </div>
   </main>
@@ -251,6 +294,7 @@
         <li><strong>Consulta pública.</strong> Três vezes por dia, um robô lê o relatório <a href="https://splegisconsulta.saopaulo.sp.leg.br/Relatorio/IndexComissaoProjetoTramitacaoInterna" target="_blank" rel="noopener">Projetos em Análise nas Comissões</a> do SPLEGIS, com todas as matérias das sete comissões.</li>
         <li><strong>Normalização.</strong> Cada matéria vira uma linha com a tramitação externa (data, origem, recebimento) e a interna (data, área e estado) separadas, o relator e os autores, com os prefeitos agrupados em Executivo e as composições da Mesa em Mesa Diretora.</li>
         <li><strong>Indicadores.</strong> A idade conta dias completos desde o recebimento pela comissão (ou desde a entrada no estado atual), nas faixas de até 30, 31 a 90, 91 a 180, 181 a 365 e mais de 365 dias. Matérias enviadas e ainda não recebidas fazem parte do acervo, como no relatório.</li>
+        <li><strong>Entradas e saídas.</strong> Cada passagem de uma matéria por uma comissão vai do envio a ela até o envio para outra área, com a origem e o destino. Desde o início da coleta diária, a hora e o destino de cada saída vêm das tramitações que o SPLEGIS registra no dia.</li>
         <li><strong>Série histórica.</strong> Cada retrato fica guardado. O período de novembro de 2018 a outubro de 2026 foi reconstruído a partir dos eventos de tramitação que o SPLEGIS registra dia a dia e conferido contra o histórico oficial das matérias (<a href="https://github.com/prototiposlegisla/comissoes-acervo/blob/main/dados/reconstrucao/README.md">método e validação</a>).</li>
       </ol>
     </section>

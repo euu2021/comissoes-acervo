@@ -35,6 +35,12 @@ jobs:
             python3 -m coletor.coletar
           fi
 
+      # Hora e destino das saídas do acervo, para o painel. Uma falha aqui não perde a
+      # coleta: a execução seguinte baixa de novo o dia anterior e o corrente.
+      - name: Tramitações do dia
+        continue-on-error: true
+        run: python3 -m coletor.tramitacoes
+
       - name: Gravar no repositório
         run: |
           git config user.name "github-actions[bot]"
