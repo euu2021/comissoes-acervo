@@ -3,7 +3,7 @@
 import unittest
 
 from coletor.legislativo import encerrados, relatorias
-from painel.legislativo import (assunto_util, autoria_dos_projetos, conclusao, desfecho, membros, montar,
+from painel.legislativo import (assunto_util, autoria_dos_projetos, conclusao, desfecho, funil, membros, montar,
                                 partido_na_data, prazos)
 
 
@@ -106,6 +106,20 @@ class TestLegislativo(unittest.TestCase):
         self.assertEqual(m["por_comissao"]["CCJ"], [0, pt, 1, 1, pt, 1, 2, pt, 1])
         self.assertEqual(m["por_comissao"]["TODAS"][:3], [0, pt, 1])
         self.assertEqual(m["partidos"], ["PT"])  # B entrou depois do dia 15 e saiu antes do seguinte
+
+
+    def test_funil_encaixado(self):
+        autoria = {"PL 1/2022": ("Vereadores", "PT"), "PL 2/2022": ("Vereadores", "PT"), "PL 3/2022": ("Executivo", ""),
+                   "PL 4/2022": ("Vereadores", "PL")}
+        base = {"despacho": "1", "despachado_em": "2022-02-01T10:00:00", "relator": "A"}
+        rel = [{**base, "rotulo": "PL 1/2022", "comissao": "CCJ", "parecer_em": "2022-03-01T00:00:00", "conclusao": "LEGALIDADE"},
+               {**base, "rotulo": "PL 1/2022", "comissao": "FIN", "parecer_em": "", "conclusao": ""},
+               {**base, "rotulo": "PL 2/2022", "comissao": "CCJ", "parecer_em": "", "conclusao": ""}]
+        enc = encerrados([{"tipo": "PL", "numero": 3, "ano": 2022, "leitura": "", "encerramento": "",
+                           "motivo": "Encerrado-PROMULGADO"}])
+        f = funil(rel, enc, autoria, [2022])
+        self.assertEqual(f["por_autoria"]["Vereadores"], [[3, 2, 1, 0, 0, 0]])
+        self.assertEqual(f["por_autoria"]["Executivo"], [[1, 1, 1, 1, 1, 1]])  # aprovado sem passar: conta em tudo
 
 
 if __name__ == "__main__":

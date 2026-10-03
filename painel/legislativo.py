@@ -14,7 +14,8 @@ partir do que coletor/legislativo.py guarda do webservice do SPLEGIS:
   retirada, apensamento, arquivamento no fim da legislatura) e quantos seguem em tramitação,
   também pela autoria e pelo partido do primeiro autor;
 - prazos: quanto tempo cada comissão levou para dar o parecer, por ano e por autoria;
-- membros: quantos membros de cada partido cada comissão tinha, mês a mês.
+- membros: quantos membros de cada partido cada comissão tinha, mês a mês;
+- funil: até onde chegaram os projetos apresentados em cada ano, por autoria.
 """
 from __future__ import annotations
 
@@ -195,6 +196,44 @@ def membros(cargos: list[dict], filiacoes: dict[str, list[tuple]], fim: str) -> 
                                  for v in (i, idx[p], n)] for c, d in contagem.items()}}
 
 
+ETAPAS_FUNIL = ["apresentados", "relator", "parecer", "comissoes", "aprovados", "lei"]
+
+
+def funil(relatorias: list[dict], encerrados: list[dict], autoria: dict[str, tuple[str, str]], anos: list[int]) -> dict:
+    """Até que etapa chegou cada projeto: apresentado, com relator em alguma comissão, com algum
+    parecer, com o parecer de todas as comissões do primeiro despacho, aprovado pela Câmara (virou
+    lei ou teve veto total) e virou lei. As etapas são encaixadas: o projeto que chegou a uma conta
+    também em todas as anteriores (o aprovado sem parecer de alguma comissão, com parecer dado em
+    plenário, conta como se tivesse passado por elas)."""
+    por_projeto: dict[str, list[dict]] = defaultdict(list)
+    for r in relatorias:
+        por_projeto[r["rotulo"]].append(r)
+    fim = {e["rotulo"]: desfecho(e["motivo"]) for e in encerrados}
+    contagem = {a: [[0] * len(ETAPAS_FUNIL) for _ in anos] for a in AUTORIAS}
+    for rotulo, (classe, _) in autoria.items():
+        ano = int(rotulo.rsplit("/", 1)[1])
+        if ano not in anos:
+            continue
+        linhas = por_projeto.get(rotulo, [])
+        despachos = [int(r["despacho"]) for r in linhas if r["despacho"].isdigit()]
+        primeiro = [r for r in linhas if despachos and r["despacho"] == str(min(despachos))]
+        etapa = 0
+        if linhas:
+            etapa = 1
+        if any(r["parecer_em"] and conclusao(r["conclusao"]) != "outros" for r in linhas):
+            etapa = 2
+        if primeiro and all(r["parecer_em"] for r in primeiro):
+            etapa = 3
+        if fim.get(rotulo) in ("lei", "vetado"):
+            etapa = 4
+        if fim.get(rotulo) == "lei":
+            etapa = 5
+        linha = contagem[classe][anos.index(ano)]
+        for k in range(etapa + 1):
+            linha[k] += 1
+    return {"etapas": ETAPAS_FUNIL, "por_autoria": contagem}  # por autoria: [projetos em cada etapa] por ano
+
+
 def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict], fim: str,
            filiacoes: list[dict] = (), cargos: list[dict] = (), assuntos: list[dict] = (),
            passagens: list[dict] = (), autores: list[dict] = ()) -> dict:
@@ -310,4 +349,5 @@ def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict],
         "desfechos_partido": dict(sorted(por_partido.items())),
         "prazos": prazos(relatorias, autoria, anos),
         "membros": membros(cargos, por_vereador, fim),
+        "funil": funil(relatorias, encerrados, autoria, anos),
     }

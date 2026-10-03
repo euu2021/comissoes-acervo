@@ -2184,6 +2184,60 @@ function renderDesfechosPorGrupo(l, cartao, porPartido) {
       linhas.map((x) => `${x.nome} ${porcentoInteiro(x.valores.lei / x.total)}`).join(", ") + "." });
 }
 
+// Funil: até onde chegaram os projetos apresentados nos anos escolhidos (painel/legislativo.py).
+const ETAPAS_FUNIL = {
+  apresentados: "Apresentados",
+  relator: "Ganharam relator em alguma comissão",
+  parecer: "Receberam parecer de alguma comissão",
+  comissoes: "Passaram por todas as comissões do despacho",
+  aprovados: "Aprovados pela Câmara",
+  lei: "Viraram lei",
+};
+const AUTORIAS_FUNIL = [["", "Todas"], ["Vereadores", "Vereadores"], ["Executivo", "Executivo (prefeito)"], ["Mesa Diretora", "Mesa Diretora"]];
+
+function renderFunil(l) {
+  const cartao = document.getElementById("c-funil");
+  const anosSel = document.getElementById("f-anos-funil");
+  const autoriaSel = document.getElementById("f-autoria-funil");
+  if (!anosSel.options.length) {
+    for (const [v, t] of ANOS_DESFECHO) anosSel.append(new Option(t, v));
+    anosSel.value = "2021-2024";  // a última legislatura encerrada
+    for (const [v, t] of AUTORIAS_FUNIL) autoriaSel.append(new Option(t, v));
+    anosSel.addEventListener("change", () => render());
+    autoriaSel.addEventListener("change", () => render());
+  }
+  const [, textoAnos, de, ate] = ANOS_DESFECHO.find(([v]) => v === anosSel.value) ?? ANOS_DESFECHO[0];
+  const anos = textoAnos.replace(/ \(.*\)$/, "");
+  const grupos = autoriaSel.value ? [autoriaSel.value] : Object.keys(l.funil.por_autoria);
+  const n = l.funil.etapas.map((_, k) => d3.sum(grupos, (a) => d3.sum(l.anos, (ano, i) =>
+    (ano >= de && ano <= ate ? l.funil.por_autoria[a][i][k] : 0))));
+  const quem = autoriaSel.value === "Executivo" ? "do Executivo" : autoriaSel.value === "Mesa Diretora" ? "da Mesa Diretora"
+    : autoriaSel.value === "Vereadores" ? "de vereadores" : "";
+  document.getElementById("sub-funil").textContent =
+    `Projetos (PL, PDL, PR e PLO) ${quem ? `${quem} ` : ""}apresentados de ${anos} e até onde chegaram. ` +
+    `Viraram lei ${porcentoInteiro(n[n.length - 1] / (n[0] || 1))}. Os filtros de comissão, de matérias e de período não se aplicam.`;
+  const lista = cartao.querySelector(".funil");
+  lista.replaceChildren(...l.funil.etapas.map((etapa, k) => {
+    const li = el("li");
+    const nome = el("span", "nome", ETAPAS_FUNIL[etapa]);
+    if (k > 0) nome.append(" ", el("small", null, `${porcentoInteiro(n[k] / (n[k - 1] || 1))} da etapa anterior`));
+    const trilho = el("span", "trilho");
+    const barra = el("span", "barra");
+    barra.style.width = `${(100 * n[k]) / (n[0] || 1)}%`;
+    trilho.append(barra);
+    li.append(nome, el("span", "valor", `${fmt(n[k])}${k ? ` · ${porcentoInteiro(n[k] / (n[0] || 1))}` : ""}`), trilho);
+    li.title = `${ETAPAS_FUNIL[etapa]}: ${fmt(n[k])} projetos, ${porcentoInteiro(n[k] / (n[0] || 1))} dos apresentados`;
+    return li;
+  }));
+  const botao = el("button", "botao", "Baixar CSV");
+  botao.type = "button";
+  botao.addEventListener("click", () => baixarTabela(["etapa", "projetos", "% dos apresentados", "% da etapa anterior"],
+    l.funil.etapas.map((etapa, k) => [ETAPAS_FUNIL[etapa], n[k], Math.round((1000 * n[k]) / (n[0] || 1)) / 10,
+                                      k ? Math.round((1000 * n[k]) / (n[k - 1] || 1)) / 10 : null]),
+    `funil-${anosSel.value}-${(autoriaSel.value || "todas").toLowerCase().replace(" ", "-")}.csv`));
+  cartao.querySelector(".acoes-csv").replaceChildren(botao);
+}
+
 function renderDesfechos(l) {
   const cartao = document.getElementById("c-desfechos");
   const modo = ["ano", "autoria", "partido"].includes(cartao.dataset.modo) ? cartao.dataset.modo : "ano";
@@ -2218,7 +2272,8 @@ function renderDesfechos(l) {
 }
 
 function renderLegislativo(l, t, nomes, ultimoDia) {
-  const cartoes = ["c-pareceres", "c-relatores", "c-desfechos", "c-presidentes", "c-assuntos", "c-prazos", "c-membros", "c-saidas"]
+  const cartoes = ["c-pareceres", "c-relatores", "c-desfechos", "c-presidentes", "c-assuntos", "c-prazos", "c-membros", "c-funil",
+                   "c-saidas"]
     .map((id) => document.getElementById(id));
   for (const cartao of cartoes) cartao.querySelector(".erro-fluxos")?.remove();
   if (!(t instanceof Error) && t) renderSaidas(t, nomes);
@@ -2233,6 +2288,7 @@ function renderLegislativo(l, t, nomes, ultimoDia) {
   renderMembros(l, ultimoDia);
   renderAssuntos(l);
   renderDesfechos(l);
+  renderFunil(l);
 }
 
 function renderTramitacao(t, nomes, ultimoDia) {
