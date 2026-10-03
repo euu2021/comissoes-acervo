@@ -33,7 +33,7 @@ from reconstrucao import validacao as V
 DIR_SAIDA = C.DIR_DADOS / "reconstrucao"
 
 CAMPOS_PRESENCAS = ["comissao", "rotulo", "materia_id", "desde", "ate", "enviado_por",
-                    "enviado_em", "recebido_em", "destino"]
+                    "enviado_em", "recebido_em", "destino", "motivo_saida"]
 CAMPOS_PASSOS = ["comissao", "rotulo", "data", "area", "passo", "comentario", "fonte"]
 CAMPOS_MATERIAS = ["rotulo", "materia_id", "tipo", "numero", "ano", "ementa"]
 CAMPOS_AUTORIAS = ["rotulo", "ordem", "autor_codigo", "autor"]
@@ -116,6 +116,7 @@ def gerar(inicio: date, serie_desde: date, amostra: int) -> int:
         "desde": p.desde or (p.enviado_em if p.enviado_em != L.DESCONHECIDO else L.DESCONHECIDO),
         "ate": p.ate or "", "enviado_por": p.enviado_por or "",
         "enviado_em": p.enviado_em, "recebido_em": p.recebido_em, "destino": p.destino or "",
+        "motivo_saida": p.motivo_saida or "",
     } for p in ordem])
     gravar_csv(DIR_SAIDA / "passos_internos.csv", CAMPOS_PASSOS, [{
         "comissao": p.comissao, "rotulo": p.rotulo, "data": x.data, "area": x.area,

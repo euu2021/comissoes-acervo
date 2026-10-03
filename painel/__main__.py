@@ -8,9 +8,10 @@ Gera os dados do painel em site/dados/ a partir de dados/:
 
 Grava um arquivo por grupo (serie-projetos.json e serie-todas.json), em colunas:
 uma lista de datas e, para cada comissão (e TODAS), uma lista por métrica. Grava também
-o retrato do dia (retrato.json), matéria a matéria, para as visões do retrato atual, e
-as passagens das matérias pelas comissões (fluxos.json), para os gráficos de entradas e
-saídas, permanência e rotas (ver fluxos.py).
+o retrato do dia (retrato.json), matéria a matéria, para as visões do retrato atual; as
+passagens das matérias pelas comissões (fluxos.json), para os gráficos de entradas e
+saídas, permanência e rotas (ver fluxos.py); e as votações por mês e o tempo de cada
+etapa (tramitacao.json, ver etapas.py).
 
 Uso (da raiz do repositório):  python -m painel
 """
@@ -23,7 +24,7 @@ from datetime import datetime
 
 from coletor import config as C
 from coletor.util import ler_csv, log
-from painel import fluxos, retrato
+from painel import etapas, fluxos, retrato
 from reconstrucao import serie as S
 
 SAIDA = C.RAIZ / "site" / "dados"
@@ -107,6 +108,14 @@ def main() -> int:
     arquivo = SAIDA / "fluxos.json"
     arquivo.write_text(json.dumps(conteudo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     log(f"{arquivo.name}: {len(lista)} passagens, {arquivo.stat().st_size / 1e6:.1f} MB")
+
+    ancora = min(coletas, key=lambda c: c["data"])["coletado_em"][:19]
+    passos = etapas.passos_por_materia(ler_csv(C.DIR_DADOS / "reconstrucao" / "passos_internos.csv"),
+                                       ler_csv(C.ARQ_PASSOS_FEED), ancora)
+    conteudo = {**etapas.calcular(lista, passos, max(c["data"] for c in coletas)), "inicio_coleta": inicio_coleta}
+    arquivo = SAIDA / "tramitacao.json"
+    arquivo.write_text(json.dumps(conteudo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    log(f"{arquivo.name}: {len(conteudo['meses'])} meses, {arquivo.stat().st_size / 1e3:.0f} kB")
     return 0
 
 

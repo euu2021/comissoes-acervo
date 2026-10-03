@@ -405,7 +405,9 @@ function graficoEmpilhado(alvo, datas, camadas, opcoes) {
   }));
 }
 
-// Várias linhas na mesma escala. `pontos` marca cada dia da série (útil quando ela é curta).
+// Várias linhas na mesma escala. `pontos` marca cada ponto da série (útil quando ela é curta).
+// Opções: marcos (false para tirar as linhas de legislatura e coleta), titulo(i) e formato(v)
+// para a dica, detalhe(s, i) para o texto depois do nome e total (série para o percentual).
 function graficoLinhas(alvo, datas, series, opcoes) {
   const c = cores();
   const largura = alvo.clientWidth;
@@ -428,7 +430,7 @@ function graficoLinhas(alvo, datas, series, opcoes) {
     color: { domain: series.map((s) => s.nome), range: series.map((s) => c.v(s.cor)) },
     marks: [
       ...m.eixos,
-      ...marcos(datas, c, opcoes.inicioColeta, largura),
+      ...(opcoes.marcos === false ? [] : marcos(datas, c, opcoes.inicioColeta, largura)),
       Plot.lineY(longo, { x: "d", y: "v", z: "s", stroke: "s", strokeWidth: 2, strokeLinejoin: "round", strokeLinecap: "round" }),
       ...series.filter((s) => s.pontos).map((s) => Plot.dot(longo.filter((p) => p.s === s.nome),
         { x: "d", y: "v", r: 3, fill: c.v(s.cor), stroke: c.superficie, strokeWidth: 1.5 })),
@@ -437,9 +439,12 @@ function graficoLinhas(alvo, datas, series, opcoes) {
   });
   descrever(svg, opcoes.descricao);
   alvo.replaceChildren(svg);
+  const formato = opcoes.formato ?? fmt;
+  const detalhe = opcoes.detalhe ?? ((s, i) => (opcoes.total?.[i] ? `(${porcentoInteiro(s.valores[i] / opcoes.total[i])} do acervo)` : ""));
   interagir(alvo, svg, datas, (i) => ({
-    linhas: series.filter((s) => s.valores[i] != null).map((s) => ({ cor: c.v(s.cor), valor: fmt(s.valores[i]),
-      nome: opcoes.total?.[i] ? `${s.nome} (${porcentoInteiro(s.valores[i] / opcoes.total[i])} do acervo)` : s.nome })),
+    titulo: opcoes.titulo?.(i),
+    linhas: series.filter((s) => s.valores[i] != null).map((s) => ({ cor: c.v(s.cor), valor: formato(s.valores[i]),
+      nome: `${s.nome} ${detalhe(s, i)}`.trim() })),
   }));
 }
 
@@ -525,7 +530,7 @@ function renderMultiplos(j, i0, i1) {
   }
 }
 
-function renderEvolucao(j, serie, fluxos) {
+function renderEvolucao(j, serie, fluxos, tramitacao) {
   const [i0, i1] = intervalo(j.datasObj);
   const datas = j.datasObj.slice(i0, i1);
   const fatia = (campo) => serie[campo].slice(i0, i1);
@@ -606,6 +611,7 @@ function renderEvolucao(j, serie, fluxos) {
   }
 
   renderFluxos(fluxos, { comissao: nomeComissao, grupo: nomeGrupo });
+  renderTramitacao(tramitacao, { comissao: nomeComissao, grupo: nomeGrupo }, j.datasObj[j.datasObj.length - 1]);
 }
 
 // ----------------------------------------------------------------------------- fluxos
@@ -674,14 +680,9 @@ function janelaFluxos(f) {
   return [inicio, f.fimDia];
 }
 
-// Arquivamento de janeiro do primeiro ano de cada legislatura (2021, 2025...): não é decisão
-// da comissão, então a passagem conta como observada só até ali.
-function arquivamentoDeLegislatura(f, i) {
-  if (f.areaDestino[i] !== "ARQUIVO") return false;
-  const d = diaParaData(f, f.ate[i]);
-  const ano = d.getUTCFullYear();
-  return (ano - 2021) % 4 === 0 && (d.getUTCMonth() === 0 || (d.getUTCMonth() === 1 && d.getUTCDate() <= 15));
-}
+// Arquivamento de fim de legislatura (art. 275 do Regimento Interno): não é decisão da
+// comissão, então a passagem conta como observada só até ali.
+const arquivamentoDeLegislatura = (f, i) => f.fim_legislatura[i] === 1;
 
 // ----------------------------------------------------------------------------- entradas e saídas
 function contarFluxos(f, inicio, fim) {
@@ -1063,6 +1064,159 @@ function renderRotas(f) {
   cartao.querySelector(".acoes-csv").replaceChildren(botaoCsv);
 }
 
+// ----------------------------------------------------------------------------- votações e tempo das etapas
+/* Dados em dados/tramitacao.json (painel/etapas.py): votações por mês e mediana do tempo de
+   cada etapa por ano, por grupo × comissão. */
+const VOTACOES = [
+  { chave: "votadas", nome: "Votada na comissão", cor: "--s1" },
+  { chave: "conjunta", nome: "Aprovada em reunião conjunta", cor: "--s2" },
+];
+const ESTAGIOS = [
+  { chave: "relator", nome: "Da chegada ao relator", cor: "--s1" },
+  { chave: "estudo", nome: "Do relator à pauta", cor: "--s2" },
+  { chave: "pauta", nome: "Da pauta à votação", cor: "--s3" },
+];
+
+async function carregarTramitacao() {
+  if (!cache.tramitacao) {
+    const r = await fetch("dados/tramitacao.json");
+    if (!r.ok) throw new Error(`não foi possível carregar dados/tramitacao.json (${r.status})`);
+    cache.tramitacao = await r.json();
+  }
+  return cache.tramitacao;
+}
+
+const mesParaData = (mes) => utc(`${mes}-01`);
+const rotuloMes = (d) => `${MESES_LONGOS[d.getUTCMonth()]} de ${d.getUTCFullYear()}`;
+
+// Barras empilhadas por mês, com uma linha de média (mesma escala).
+function graficoBarrasMes(alvo, faixas, camadas, opcoes) {
+  const c = cores();
+  const largura = alvo.clientWidth;
+  const segmentos = [];
+  for (const x of faixas) {
+    let acima = 0;
+    for (const k of camadas) {
+      const v = x.valores[k.chave];
+      if (v) segmentos.push({ x, y1: acima, y2: (acima += v), k: k.nome });
+    }
+  }
+  const datas = [faixas[0].a, faixas[faixas.length - 1].b];
+  const maximo = d3.max(faixas, (x) => Math.max(x.total, x.media ?? 0)) || 1;
+  const m = moldura(c, datas, largura, opcoes.altura, { yDomain: [0, maximo], marginRight: MARGEM_DIREITA });
+  const vao = (largura - 48 - MARGEM_DIREITA) / faixas.length > 5 ? 1 : 0;
+  const comMedia = faixas.filter((x) => x.media != null);
+  const svg = Plot.plot({
+    ...m.opcoes,
+    color: { domain: camadas.map((k) => k.nome), range: camadas.map((k) => c.v(k.cor)) },
+    marks: [
+      ...m.eixos,
+      Plot.rect(segmentos, { x1: (s) => s.x.a, x2: (s) => s.x.b, y1: "y1", y2: "y2", fill: "k",
+        fillOpacity: (s) => (s.x.parcial ? 0.5 : 1), insetLeft: vao, insetRight: vao }),
+      Plot.ruleY([0], { stroke: c.base }),
+      Plot.line(comMedia, { x: "meio", y: "media", stroke: c.tinta, strokeWidth: 1.5, strokeLinejoin: "round" }),
+      ...marcos(datas, c, opcoes.inicioColeta, largura),
+    ],
+  });
+  descrever(svg, opcoes.descricao);
+  alvo.replaceChildren(svg);
+  interagir(alvo, svg, faixas.map((x) => x.meio), (i) => {
+    const x = faixas[i];
+    return {
+      titulo: x.parcial ? `${rotuloMes(x.a)} (até ${dataBR(opcoes.ultimoDia)})` : rotuloMes(x.a),
+      linhas: [
+        ...camadas.map((k) => ({ cor: c.v(k.cor), quadrado: true, valor: fmt(x.valores[k.chave]), nome: k.nome })),
+        { total: true, valor: fmt(x.total), nome: "no mês" },
+        ...(x.media != null ? [{ total: true, valor: fmt(Math.round(x.media)), nome: "média dos 12 meses até aqui" }] : []),
+      ],
+    };
+  });
+}
+
+function renderProducao(t, nomes, ultimoDia) {
+  const cartao = document.getElementById("c-producao");
+  const serie = t.producao[estado.grupo][estado.comissao];
+  const ultimoMes = t.meses[t.meses.length - 1];
+  const parcial = dataISO(ultimoDia) < dataISO(new Date(d3.utcMonth.offset(mesParaData(ultimoMes), 1) - DIA));
+  const totais = t.meses.map((_, i) => serie.votadas[i] + serie.conjunta[i]);
+  // Média móvel de 12 meses completos (tira o efeito dos recessos de janeiro e julho).
+  const completos = parcial ? t.meses.length - 1 : t.meses.length;
+  const media = t.meses.map((_, i) => (i >= 11 && i < completos ? d3.mean(totais.slice(i - 11, i + 1)) : null));
+  const desde = { tudo: t.meses[0], legislatura: "2025-01",
+                  "12m": dataISO(d3.utcMonth.offset(mesParaData(ultimoMes), -12)).slice(0, 7),
+                  "90d": dataISO(d3.utcMonth.offset(mesParaData(ultimoMes), -3)).slice(0, 7) }[estado.periodo];
+  const i0 = Math.max(0, t.meses.findIndex((mes) => mes >= desde));
+  const faixas = t.meses.slice(i0).map((mes, k) => {
+    const i = i0 + k;
+    const a = mesParaData(mes);
+    const b = d3.utcMonth.offset(a, 1);
+    return { a, b, meio: new Date((+a + +b) / 2), parcial: parcial && i === t.meses.length - 1, total: totais[i],
+             media: media[i], valores: { votadas: serie.votadas[i], conjunta: serie.conjunta[i] } };
+  });
+  const votados = estado.grupo === "projetos" ? "Projetos votados" : "Matérias votadas";
+  const onde = nomes.comissao.replace(/^da /, "na ").replace(/^das /, "nas ");
+  document.getElementById("sub-producao").textContent =
+    `${votados} ${onde} por mês. ` +
+    (estado.comissao === "TODAS" ? "Uma matéria votada em duas comissões conta duas vezes. " : "") +
+    "A linha é a média dos 12 meses anteriores, que tira o efeito dos recessos.";
+  legenda(cartao, [...VOTACOES, { nome: "Média de 12 meses", cor: "--tinta", linha: true }]);
+  acoesTabela(cartao, [{ nome: "mês" }, ...VOTACOES.map((k) => ({ nome: k.nome.toLowerCase() })), { nome: "total" },
+                       { nome: "média de 12 meses" }],
+              faixas.map((x) => [dataISO(x.a).slice(0, 7), x.valores.votadas, x.valores.conjunta, x.total,
+                                  x.media == null ? null : Math.round(x.media)]),
+              `votacoes-${estado.comissao.toLowerCase()}-${estado.grupo}.csv`);
+  if (cartao.dataset.tabela === "1") return;
+  const ultimoAno = faixas.filter((x) => !x.parcial).slice(-12);
+  graficoBarrasMes(cartao.querySelector(".grafico"), faixas, VOTACOES, {
+    altura: 280, inicioColeta: t.inicio_coleta, ultimoDia,
+    descricao: `${votados} ${onde} por mês, ${PERIODO_TEXTO[estado.periodo]}. ` +
+      `Nos últimos 12 meses completos, ${fmt(d3.sum(ultimoAno, (x) => x.total))} votações.` });
+}
+
+function renderTempos(t, nomes) {
+  const cartao = document.getElementById("c-tempos");
+  const serie = t.tempos[estado.grupo][estado.comissao];
+  const anoAtual = t.anos[t.anos.length - 1];
+  const datas = t.anos.map((a) => utc(`${a}-01-01`));
+  const series = ESTAGIOS.map((k) => ({ ...k, valores: serie[k.chave].mediana, linha: true, pontos: true }));
+  const onde = nomes.comissao.replace(/^da /, "na ").replace(/^das /, "nas ");
+  document.getElementById("sub-tempos").textContent =
+    `Mediana, em dias, de cada etapa ${onde}, pelo ano em que ela terminou. ` +
+    "Só entram as etapas que terminaram; o filtro de período não se aplica.";
+  legenda(cartao, series);
+  const colunas = [{ nome: "ano" }];
+  for (const k of ESTAGIOS) {
+    const nome = k.nome.toLowerCase();
+    colunas.push({ nome: `${nome}: mediana (dias)` }, { nome: `${nome}: 1º quartil` },
+                 { nome: `${nome}: 3º quartil` }, { nome: `${nome}: etapas` });
+  }
+  acoesTabela(cartao, colunas, t.anos.map((a, i) => [String(a), ...ESTAGIOS.flatMap((k) =>
+    [serie[k.chave].mediana[i], serie[k.chave].p25[i], serie[k.chave].p75[i], serie[k.chave].n[i]])]),
+    `etapas-${estado.comissao.toLowerCase()}-${estado.grupo}.csv`);
+  if (cartao.dataset.tabela === "1") return;
+  const dias = (v) => `${fmt(v)} ${v === 1 ? "dia" : "dias"}`;
+  graficoLinhas(cartao.querySelector(".grafico"), datas, series, {
+    altura: 260, marcos: false, formato: dias,
+    titulo: (i) => (t.anos[i] === anoAtual ? `${anoAtual} (até agora)` : String(t.anos[i])),
+    detalhe: (s, i) => {
+      const x = serie[s.chave];
+      return `— metade entre ${fmt(x.p25[i])} e ${fmt(x.p75[i])}; ${fmt(x.n[i])} etapas`;
+    },
+    descricao: `Mediana de cada etapa ${onde}, por ano. ` + ESTAGIOS.map((k) =>
+      `${k.nome}: ${serie[k.chave].mediana.map((v, i) => `${t.anos[i]} ${v ?? "—"}`).join(", ")}`).join("; ") + "." });
+}
+
+function renderTramitacao(t, nomes, ultimoDia) {
+  const cartoes = ["c-producao", "c-tempos"].map((id) => document.getElementById(id));
+  for (const cartao of cartoes) cartao.querySelector(".erro-fluxos")?.remove();
+  if (t instanceof Error) {
+    for (const cartao of cartoes) cartao.append(el("p", "vazio erro-fluxos", `Erro ao carregar os dados: ${t.message}`));
+    return;
+  }
+  renderProducao(t, nomes, ultimoDia);
+  renderTempos(t, nomes);
+}
+
 function renderFluxos(f, nomes) {
   const cartoes = ["c-fluxo", "c-permanencia", "c-rotas"].map((id) => document.getElementById(id));
   for (const cartao of cartoes) cartao.querySelector(".erro-fluxos")?.remove();
@@ -1101,10 +1255,13 @@ async function render() {
   conteudo.classList.add("carregando");
   let j;
   let fluxos = null;
+  let tramitacao = null;
   try {
     j = await carregar(estado.grupo);
     if (estado.aba === "retrato") await carregarRetrato();
-    else fluxos = await carregarFluxos().catch((e) => e);  // sem elas, os outros gráficos ainda saem
+    else {  // sem estes arquivos, os outros gráficos ainda saem
+      [fluxos, tramitacao] = await Promise.all([carregarFluxos().catch((e) => e), carregarTramitacao().catch((e) => e)]);
+    }
   } catch (e) {
     conteudo.classList.remove("carregando");
     mostrarErro(`Erro ao carregar os dados: ${e.message}`);
@@ -1123,7 +1280,7 @@ async function render() {
   renderKpis(j, serie);
   mostrarAba();
   if (estado.aba === "retrato") renderRetrato();
-  else renderEvolucao(j, serie, fluxos);
+  else renderEvolucao(j, serie, fluxos, tramitacao);
 }
 
 // ----------------------------------------------------------------------------- retrato do dia

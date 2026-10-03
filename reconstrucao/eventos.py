@@ -3,7 +3,7 @@
 Eventos do feed diário do SPLEGIS: interpretação e correções.
 
 O feed registra cada tramitação como texto:
-  "tramitada da área X para a área Y.  Motivo: …  Obs: …"   envio
+  "tramitada da área X para a área Y.  Motivo: …  Obs: …"   envio (com o motivo)
   "recebida na área Y (enviada da área X)."                   recebimento
   "excluída tramitação da área X para a área Y."              envio desfeito
   "excluído recebimento na área Y."                           recebimento desfeito
@@ -39,6 +39,7 @@ class Evento:
     area: str = ""
     passo: str = ""
     comentario: str = ""
+    motivo: str = ""        # envio: "Motivo: A pedido. Obs: Aprovado em Reunião Conjunta."
 
 
 _RX_PREFIXO = re.compile(r"^Matéria [^:]*: ?")
@@ -79,8 +80,10 @@ def interpretar(texto: str) -> dict:
     if m := _RX_EXCL_ENVIO.match(corpo):
         return {"tipo": "excl_envio", "de": m[1].strip(), "para": m[2].strip()}
     # "Motivo:" e "Obs:" vêm depois de dois espaços; nomes de área podem ter ponto ("LIDER. PT").
-    if m := _RX_ENVIO.match(corpo.split("  ")[0].strip()):
-        return {"tipo": "envio", "de": m[1].strip(), "para": m[2].strip()}
+    partes = corpo.split("  ")
+    if m := _RX_ENVIO.match(partes[0].strip()):
+        return {"tipo": "envio", "de": m[1].strip(), "para": m[2].strip(),
+                "motivo": re.sub(r"\s+", " ", " ".join(partes[1:])).strip()}
     return {"tipo": "outro"}
 
 

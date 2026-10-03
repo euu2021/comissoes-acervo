@@ -44,41 +44,44 @@ def estadas(historico: list[dict], dias: list[str]) -> list[dict]:
             seguida = atual is not None and atual["ultimo"] and seguinte.get(atual["ultimo"]) == h["desde"]
             if seguida and h["enviado_em"] == atual["enviado_em"]:
                 atual["ultimo"] = h["ate"]
+                atual["recebido_em"] = atual["recebido_em"] or h["recebido_em"]
                 continue
             if seguida:
                 atual["volta"] = h["enviado_em"]
             if atual is not None:
                 saida.append(atual)
             atual = {"comissao": comissao, "rotulo": rotulo, "primeiro": h["desde"], "ultimo": h["ate"],
-                     "enviado_por": h["enviado_por"], "enviado_em": h["enviado_em"], "volta": ""}
+                     "enviado_por": h["enviado_por"], "enviado_em": h["enviado_em"],
+                     "recebido_em": h["recebido_em"], "volta": ""}
         saida.append(atual)
     return saida
 
 
 def _saida(e: dict, instantes: dict[str, str], seguinte: dict[str, str],
-           tramitacoes: dict[str, list[dict]], chegadas: dict[tuple, str]) -> tuple[str, str]:
-    """Quando e para onde a estada `e` (já encerrada) saiu da comissão."""
+           tramitacoes: dict[str, list[dict]], chegadas: dict[tuple, str]) -> tuple[str, str, str]:
+    """Quando, para onde e com que motivo a estada `e` (já encerrada) saiu da comissão."""
     proximo = seguinte[e["ultimo"]] if not e["volta"] else ""
     limite = e["volta"] or instantes[proximo]
     for t in reversed(tramitacoes.get(e["rotulo"], [])):
         if t["data"] > limite or t["data"][:10] < e["ultimo"]:
             continue
         if t["tipo"] == "envio" and t["de"] == e["comissao"]:
-            return t["data"], t["para"]
+            return t["data"], t["para"], t.get("motivo", "")
         if t["tipo"] == "excl_envio" and t["para"] == e["comissao"]:
-            return t["data"], t["de"]  # envio desfeito: a matéria volta a quem a enviou
+            return t["data"], t["de"], ""  # envio desfeito: a matéria volta a quem a enviou
     if e["volta"]:
-        return e["volta"], DESCONHECIDO
+        return e["volta"], DESCONHECIDO, ""
     outra = chegadas.get((e["rotulo"], proximo), DESCONHECIDO)
-    return proximo, outra
+    return proximo, outra, ""
 
 
 def passagens(reconstruidas: list[dict], historico: list[dict], coletas: list[dict],
               tramitacoes: list[dict]) -> list[dict]:
     """Passagens da reconstrução completadas com os retratos diários.
 
-    Cada passagem: comissao, rotulo, desde e ate (data e hora ISO; None = desconhecido
-    ou, em ate, ainda no acervo), origem e destino (área; "" = ainda no acervo)."""
+    Cada passagem: comissao, rotulo, desde, recebido e ate (data e hora ISO; None =
+    desconhecido, não recebida ou, em ate, ainda no acervo), origem e destino (área; "" =
+    ainda no acervo) e o motivo da saída, como o feed o registra."""
     instantes = {c["data"]: c["coletado_em"][:19] for c in coletas}
     dias = sorted(instantes)
     seguinte = dict(zip(dias, dias[1:]))
@@ -99,15 +102,18 @@ def passagens(reconstruidas: list[dict], historico: list[dict], coletas: list[di
     usadas = set()
     for p in reconstruidas:
         nova = {"comissao": p["comissao"], "rotulo": p["rotulo"], "desde": valor(p["desde"]),
-                "ate": valor(p["ate"]), "origem": p["enviado_por"] or "", "destino": p["destino"]}
+                "recebido": valor(p["recebido_em"]), "ate": valor(p["ate"]), "origem": p["enviado_por"] or "",
+                "destino": p["destino"], "motivo": p.get("motivo_saida", "")}
         if not p["ate"]:  # estava no acervo na primeira coleta: o retrato diz como continua
             e = abertas.get((p["comissao"], p["rotulo"]))
             if e is None:  # a reconstrução diverge do retrato (raro): sai na primeira coleta
                 nova["ate"], nova["destino"] = primeiro_dia, DESCONHECIDO
             else:
                 usadas.add(id(e))
+                nova["recebido"] = nova["recebido"] or valor(e["recebido_em"])
                 if e["ultimo"]:
-                    nova["ate"], nova["destino"] = _saida(e, instantes, seguinte, por_materia, chegadas)
+                    nova["ate"], nova["destino"], nova["motivo"] = _saida(e, instantes, seguinte, por_materia,
+                                                                          chegadas)
         saida.append(nova)
 
     for e in lista:
@@ -117,12 +123,19 @@ def passagens(reconstruidas: list[dict], historico: list[dict], coletas: list[di
             desde = e["enviado_em"] or e["primeiro"]
         else:  # envio antigo: a matéria voltou porque um envio posterior foi desfeito
             desde = e["primeiro"]
-        nova = {"comissao": e["comissao"], "rotulo": e["rotulo"], "desde": desde, "ate": None,
-                "origem": e["enviado_por"], "destino": ""}
+        nova = {"comissao": e["comissao"], "rotulo": e["rotulo"], "desde": desde,
+                "recebido": valor(e["recebido_em"]), "ate": None, "origem": e["enviado_por"],
+                "destino": "", "motivo": ""}
         if e["ultimo"]:
-            nova["ate"], nova["destino"] = _saida(e, instantes, seguinte, por_materia, chegadas)
+            nova["ate"], nova["destino"], nova["motivo"] = _saida(e, instantes, seguinte, por_materia, chegadas)
         saida.append(nova)
     return saida
+
+
+def fim_de_legislatura(motivo: str) -> bool:
+    """Arquivamento de fim de legislatura, como o feed o registra: "Motivo: Encerrado-TERMINO
+    DE LEGISLATURA (ART. 275 REG. INT.)"."""
+    return "TERMINO DE LEGISLATURA" in (motivo or "").upper()
 
 
 def montar(lista: list[dict], fim: str, inicio_coleta: str, atualizado_em: str) -> dict:
@@ -149,4 +162,6 @@ def montar(lista: list[dict], fim: str, inicio_coleta: str, atualizado_em: str) 
         # ou, se `ate` também for null, matéria ainda no acervo.
         "origem": [indice.get(p["origem"]) for p in lista],
         "destino": [indice.get(p["destino"]) for p in lista],
+        # 1: saída pelo arquivamento de fim de legislatura (art. 275 do Regimento Interno)
+        "fim_legislatura": [int(fim_de_legislatura(p.get("motivo", ""))) for p in lista],
     }

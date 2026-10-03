@@ -14,7 +14,8 @@ DIAS = ["2026-10-02", "2026-10-03", "2026-10-05"]
 
 def hist(comissao, rotulo, desde, ate="", enviado_por="PROC-CMSP", enviado_em="2026-09-01T10:00:00", passo="A"):
     return {"comissao": comissao, "rotulo": rotulo, "desde": desde, "ate": ate,
-            "enviado_por": enviado_por, "enviado_em": enviado_em, "interna_tipo": passo}
+            "enviado_por": enviado_por, "enviado_em": enviado_em, "recebido_em": "2026-09-02T10:00:00",
+            "interna_tipo": passo}
 
 
 def rec(comissao, rotulo, desde="2026-09-01T10:00:00", ate="", destino="", enviado_por="PROC-CMSP"):
@@ -22,8 +23,8 @@ def rec(comissao, rotulo, desde="2026-09-01T10:00:00", ate="", destino="", envia
             "enviado_por": enviado_por, "enviado_em": desde, "recebido_em": "", "destino": destino}
 
 
-def tram(data, rotulo, de, para, tipo="envio"):
-    return {"data": data, "rotulo": rotulo, "tipo": tipo, "de": de, "para": para}
+def tram(data, rotulo, de, para, tipo="envio", motivo=""):
+    return {"data": data, "rotulo": rotulo, "tipo": tipo, "de": de, "para": para, "motivo": motivo}
 
 
 class TestEstadas(unittest.TestCase):
@@ -68,7 +69,7 @@ class TestPassagens(unittest.TestCase):
             hist("ECON", "PL 5/2026", "2026-10-02", "2026-10-03"),
         ]
         tramitacoes = [
-            tram("2026-10-03T15:00:00", "PL 1/2026", "CCJ", "ADM"),
+            tram("2026-10-03T15:00:00", "PL 1/2026", "CCJ", "ADM", motivo="Motivo: A pedido."),
             tram("2026-10-03T09:00:00", "PL 4/2026", "SAUDE", "SGP12"),
             tram("2026-10-03T12:00:00", "PL 4/2026", "SGP12", "SAUDE"),
             tram("2026-10-04T10:00:00", "PL 5/2026", "SGP22", "ECON", "excl_envio"),
@@ -81,8 +82,9 @@ class TestPassagens(unittest.TestCase):
 
     def test_saida_com_destino_da_tramitacao(self):
         [p] = self.por[("CCJ", "PL 1/2026")]
-        self.assertEqual((p["desde"], p["ate"], p["destino"]),
-                         ("2026-09-01T10:00:00", "2026-10-03T15:00:00", "ADM"))
+        self.assertEqual((p["desde"], p["ate"], p["destino"], p["motivo"]),
+                         ("2026-09-01T10:00:00", "2026-10-03T15:00:00", "ADM", "Motivo: A pedido."))
+        self.assertEqual(p["recebido"], "2026-09-02T10:00:00")  # do retrato: a reconstrução não tinha
 
     def test_entrada_depois_da_primeira_coleta(self):
         [p] = self.por[("ADM", "PL 1/2026")]
@@ -128,17 +130,25 @@ class TestTramitacoes(unittest.TestCase):
                      {"Data": "2026-10-01T12:16:00", "Descricao": "Matéria PL 7/2026: tramitada da área SGP22 para a área FIN.  Motivo: A pedido."},
                      {"Data": "2026-10-01T13:00:00", "Descricao": "Matéria PL 7/2026: recebida na área FIN (enviada da área SGP22)."},
                      {"Data": "2026-10-01T14:00:00", "Descricao": "Matéria PL 7/2026: tramitada da área SGP21 para a área SGP23. "},
-                     {"Data": "2026-10-01T15:00:00", "Descricao": "Matéria PL 7/2026: excluída tramitação da área SGP22 para a área FIN."}]},
+                     {"Data": "2026-10-01T15:00:00", "Descricao": "Matéria PL 7/2026: excluída tramitação da área SGP22 para a área FIN."},
+                     {"Data": "2026-10-01T16:00:00", "Descricao": "Matéria PL 7/2026: tramitação interna - FIN/Relator(a)/Estudo para manifestação do relator -"},
+                     {"Data": "2026-10-01T17:00:00", "Descricao": "Matéria PL 7/2026: tramitação interna - SGP21/Secretaria/Para Ciência -"}]},
                  {"Sigla": "RDS", "Numero": 1, "Ano": 2026, "Eventos": [
                      {"Data": "2026-10-01T12:00:00", "Descricao": "Matéria RDS 1/2026: tramitada da área CCJ para a área SGP21."}]}]
-        self.assertEqual(extrair(itens), [
-            {"data": "2026-10-01T12:16:00", "rotulo": "PL 7/2026", "tipo": "envio", "de": "SGP22", "para": "FIN"},
-            {"data": "2026-10-01T15:00:00", "rotulo": "PL 7/2026", "tipo": "excl_envio", "de": "SGP22", "para": "FIN"}])
+        envios, passos = extrair(itens)
+        self.assertEqual(envios, [
+            {"data": "2026-10-01T12:16:00", "rotulo": "PL 7/2026", "tipo": "envio", "de": "SGP22", "para": "FIN",
+             "motivo": "Motivo: A pedido."},
+            {"data": "2026-10-01T15:00:00", "rotulo": "PL 7/2026", "tipo": "excl_envio", "de": "SGP22", "para": "FIN",
+             "motivo": ""}])
+        self.assertEqual(passos, [
+            {"data": "2026-10-01T16:00:00", "rotulo": "PL 7/2026", "tipo": "interna", "comissao": "FIN",
+             "area": "Relator(a)", "passo": "Estudo para manifestação do relator", "comentario": ""}])
 
     def test_juntar_nao_repete_e_ordena(self):
         a = tram("2026-10-02T10:00:00", "PL 1/2026", "CCJ", "ADM")
         b = tram("2026-10-01T10:00:00", "PL 2/2026", "FIN", "SGP21")
-        self.assertEqual(juntar([a], [b, a]), [b, a])
+        self.assertEqual(juntar([a], [b, a], list(a)), [b, a])
 
 
 if __name__ == "__main__":

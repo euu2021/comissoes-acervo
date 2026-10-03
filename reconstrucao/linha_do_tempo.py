@@ -27,6 +27,7 @@ class Trecho:
     enviado_por: str | None = None
     enviado_em: str | None = None
     recebido_em: str | None = None
+    motivo: str | None = None  # do envio que levou a matéria a `loc` ("" = envio desfeito)
 
 
 def trechos(externos: list[Evento], ancora: dict | None) -> tuple[list[Trecho], list[str]]:
@@ -56,8 +57,8 @@ def trechos(externos: list[Evento], ancora: dict | None) -> tuple[list[Trecho], 
     anomalias: list[str] = []
     ignorados: dict[str, str] = {}  # área -> recebimento ignorado desde a última mudança
 
-    def registrar(t: str) -> None:
-        lista.append(replace(pilha[-1], inicio=t))
+    def registrar(t: str, **mudancas) -> None:
+        lista.append(replace(pilha[-1], inicio=t, **mudancas))
 
     for e in externos:
         topo = pilha[-1]
@@ -68,7 +69,7 @@ def trechos(externos: list[Evento], ancora: dict | None) -> tuple[list[Trecho], 
                     t = ignorados[e.de]
                     pilha.append(Trecho(t, e.de, t, None, None, t))
                     registrar(t)
-            pilha.append(Trecho(e.t, e.para, e.t, e.de, e.t, ""))
+            pilha.append(Trecho(e.t, e.para, e.t, e.de, e.t, "", e.motivo))
             ignorados = {}
         elif e.tipo == "excl_envio":
             if topo.loc != e.para:
@@ -89,7 +90,8 @@ def trechos(externos: list[Evento], ancora: dict | None) -> tuple[list[Trecho], 
                 anomalias.append(f"{e.t} recebimento excluído em {e.para} estando em {topo.loc}")
                 continue
             pilha[-1] = replace(topo, recebido_em="")
-        registrar(e.t)
+        # Envio desfeito: a matéria volta à estada anterior sem motivo de envio.
+        registrar(e.t, **({"motivo": ""} if e.tipo == "excl_envio" else {}))
 
     if ancora is not None and pilha[-1].loc != ancora["comissao"] and ancora["comissao"] in ignorados:
         t = ignorados[ancora["comissao"]]  # o retrato confirma: o envio faltou no feed
@@ -122,6 +124,7 @@ class Presenca:
     recebido_em: str | None
     destino: str | None
     passos: list[Passo]
+    motivo_saida: str | None = None  # motivo do envio que tirou a matéria da comissão
 
 
 def _passos_do_feed(p: Presenca, internas: list[Evento]) -> list[Passo]:
@@ -173,7 +176,7 @@ def presencas(rotulo: str, lista: list[Trecho], internas: list[Evento],
         ultimo = g[-1]
         p = Presenca(g[0].loc, rotulo, g[0].inicio, seguinte.inicio if seguinte else None,
                      ultimo.enviado_por, ultimo.enviado_em, ultimo.recebido_em,
-                     seguinte.loc if seguinte else None, [])
+                     seguinte.loc if seguinte else None, [], seguinte.motivo if seguinte else None)
         p.passos = _passos_do_feed(p, internas)
         if p.ate is None and ancora is not None and ancora["comissao"] == p.comissao:
             # Presença que chega ao retrato: completa o que os eventos não disseram.

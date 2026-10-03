@@ -12,6 +12,7 @@ ARQ_MATERIAS = DIR_DADOS / "materias.csv"    # catálogo cumulativo das matéria
 ARQ_AUTORIAS = DIR_DADOS / "autorias.csv"    # autores de cada matéria
 ARQ_COLETAS = DIR_DADOS / "coletas.csv"      # registro de cada coleta, por comissão
 ARQ_TRAMITACOES = DIR_DADOS / "tramitacoes.csv"  # envios de e para as comissões (feed)
+ARQ_PASSOS_FEED = DIR_DADOS / "passos_internos.csv"  # passos internos nas comissões (feed)
 
 # Endpoint JSON (padrão DataTables) que alimenta o relatório público
 # "Projetos em Análise nas Comissões":

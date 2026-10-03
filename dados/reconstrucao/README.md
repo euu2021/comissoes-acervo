@@ -59,6 +59,7 @@ Datas no formato ISO 8601 (`2019-03-14T10:42:00`), no horário de Brasília.
 | `enviado_por`, `enviado_em` | Área de origem e data do envio que levou a matéria à comissão. Origem vazia indica matéria registrada já na comissão. |
 | `recebido_em` | Recebimento pela comissão. Vazio significa que não chegou a ser recebida nessa presença; `?`, que a data é desconhecida. |
 | `destino` | Para onde a matéria foi ao sair. |
+| `motivo_saida` | Motivo e observação do envio que tirou a matéria da comissão, como o feed os registra: `Motivo: Encerrado-TERMINO DE LEGISLATURA (ART. 275 REG. INT.).`, `Motivo: A pedido. Obs: Aprovado em Reunião Conjunta.` etc. Vazio quando o envio não tinha motivo, quando foi desfeito ou quando a matéria continuava no acervo. |
 
 Uma matéria está no acervo de uma comissão no dia `d` se `desde <= d 23:59:59 < ate` (com `ate` vazio valendo como infinito).
 

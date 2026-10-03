@@ -18,7 +18,7 @@ class TestInterpretar(unittest.TestCase):
     def test_envio_com_motivo_e_area_com_ponto(self):
         self.assertEqual(
             interpretar("Matéria DOCREC 1/2016: tramitada da área FIN para a área LIDER. PT.  Obs: x."),
-            {"tipo": "envio", "de": "FIN", "para": "LIDER. PT"})
+            {"tipo": "envio", "de": "FIN", "para": "LIDER. PT", "motivo": "Obs: x."})
 
     def test_recebimento(self):
         self.assertEqual(interpretar("Matéria PL 1/2026: recebida na área CCJ (enviada da área PROC-CMSP)."),
@@ -46,7 +46,8 @@ class TestLinhaDoTempo(unittest.TestCase):
     def test_passagem_por_duas_comissoes(self):
         externos = [ev("2026-08-01T10:00:00", tipo="envio", de="PROC-CMSP", para="CCJ"),
                     ev("2026-08-02T10:00:00", tipo="receb", de="PROC-CMSP", para="CCJ"),
-                    ev("2026-08-20T10:00:00", tipo="envio", de="CCJ", para="SAUDE"),
+                    ev("2026-08-20T10:00:00", tipo="envio", de="CCJ", para="SAUDE",
+                       motivo="Motivo: A pedido. Obs: Aprovado em Reunião Conjunta."),
                     ev("2026-08-24T10:00:00", tipo="receb", de="CCJ", para="SAUDE")]
         internas = [ev("2026-08-02T10:00:00", tipo="interna", comissao="CCJ", area="Presidente da Comissão",
                        passo="Designar Relator")]
@@ -57,6 +58,7 @@ class TestLinhaDoTempo(unittest.TestCase):
             ("CCJ", "2026-08-01T10:00:00", "2026-08-20T10:00:00", "2026-08-02T10:00:00", "SAUDE"),
             ("SAUDE", "2026-08-20T10:00:00", None, "2026-08-24T10:00:00", None)])
         self.assertEqual([x.fonte for x in ps[0].passos], ["chegada", "feed"])
+        self.assertEqual([p.motivo_saida for p in ps], ["Motivo: A pedido. Obs: Aprovado em Reunião Conjunta.", None])
 
     def test_recebimento_tardio_nao_move_a_materia(self):
         # DOCREC arquivado em 2011 cujo envio antigo à FIN foi "recebido" em 2019.
@@ -134,8 +136,8 @@ class TestLinhaDoTempo(unittest.TestCase):
                     ev("2026-08-01T10:01:00", tipo="excl_envio", de="SGP22", para="FIN")]
         lista, _ = trechos(externos, None)
         ps = presencas("DOCREC 1/2016", lista, [], None, "2026-07-01T00:00:00")
-        self.assertEqual([(p.comissao, p.desde, p.ate, p.destino) for p in ps],
-                         [("FIN", None, "2026-08-01T10:01:00", "SGP22")])
+        self.assertEqual([(p.comissao, p.desde, p.ate, p.destino, p.motivo_saida) for p in ps],
+                         [("FIN", None, "2026-08-01T10:01:00", "SGP22", "")])
 
     def test_parada_desde_antes_usa_o_retrato(self):
         ancora = {"comissao": "ADM", "enviado_por": "ATM", "enviado_em": "1992-09-17T12:18:00",
