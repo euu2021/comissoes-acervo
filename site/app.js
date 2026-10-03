@@ -377,7 +377,7 @@ function graficoLinha(alvo, datas, valores, opcoes) {
   descrever(svg, opcoes.descricao);
   alvo.replaceChildren(svg);
   interagir(alvo, svg, datas, (i) => ({
-    linhas: [{ cor, valor: opcoes.formato(valores[i]), nome: opcoes.nome }],
+    linhas: [{ cor, valor: opcoes.formato(valores[i]), nome: opcoes.detalhe ? `${opcoes.nome} ${opcoes.detalhe(i)}` : opcoes.nome }],
   }));
 }
 
@@ -574,10 +574,19 @@ function renderEvolucao(j, serie, fluxos, tramitacao) {
   // Mediana
   const cMediana = document.getElementById("c-mediana");
   const mediana = fatia("mediana_dias");
-  acoes(cMediana, datas, [{ nome: "idade mediana (dias)", valores: mediana }], arquivo("mediana"));
+  // Base da mediana: só as matérias já recebidas, com idade conhecida.
+  const pendentes = fatia("pendentes");
+  const recebidas = datas.map((_, i) => soma(serie, ["materias"], i0 + i) - pendentes[i] - serie.idade_desconhecida[i0 + i]);
+  acoes(cMediana, datas, [{ nome: "idade mediana (dias)", valores: mediana },
+                          { nome: "matérias recebidas (base da mediana)", valores: recebidas },
+                          { nome: "aguardando recebimento", valores: pendentes }], arquivo("mediana"));
   if (cMediana.dataset.tabela !== "1") {
     graficoLinha(cMediana.querySelector(".grafico"), datas, mediana, {
       altura: 220, marcos: true, rotuloFinal: true, inicioColeta: j.inicio_coleta, nome: "dias",
+      detalhe: (i) => `— mediana de ${fmt(recebidas[i])} ${estado.grupo === "projetos"
+        ? (recebidas[i] === 1 ? "projeto recebido" : "projetos recebidos")
+        : (recebidas[i] === 1 ? "matéria recebida" : "matérias recebidas")}` +
+        (pendentes[i] ? `; ${fmt(pendentes[i])} aguardando recebimento` : ""),
       formato: (v) => (v == null ? "—" : `${fmt(v)}`), descricao: resumo(`Idade mediana, em dias, ${nomeComissao}`, datas, mediana) });
   }
 
