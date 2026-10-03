@@ -8,6 +8,8 @@ A agregação (`agregar`) é a mesma usada para os retratos reais no painel.
 """
 from __future__ import annotations
 
+import re
+import unicodedata
 from bisect import bisect_right
 from collections import defaultdict
 from collections.abc import Iterable
@@ -22,12 +24,16 @@ FAIXAS = [(30, "idade_ate30"), (90, "idade_31a90"), (180, "idade_91a180"),
           (365, "idade_181a365"), (None, "idade_mais365")]
 CATEGORIAS = ["passo_relator", "passo_presidente", "passo_secretaria", "passo_procuradoria",
               "passo_consultoria", "passo_outro", "passo_nenhum", "passo_desconhecido"]
+# Etapas da tramitação na comissão, na ordem do processo (ver `etapa`). Matérias com passo
+# desconhecido não entram em nenhuma: estão em passo_desconhecido.
+ETAPAS = ["etapa_sem_relator", "etapa_estudo", "etapa_diligencia", "etapa_pauta", "etapa_votado",
+          "etapa_outra"]
 CAMPOS = (["data", "comissao", "grupo", "materias", "pendentes"]
-          + [f for _, f in FAIXAS] + ["idade_desconhecida", "mediana_dias"] + CATEGORIAS)
+          + [f for _, f in FAIXAS] + ["idade_desconhecida", "mediana_dias"] + CATEGORIAS + ETAPAS)
 
 # Uma matéria num dia: (comissão, é projeto?, faixa de idade, dias ou None, categoria do
-# passo interno, sem relator? ou None quando não se sabe).
-Item = tuple[str, bool, str, "int | None", str, "bool | None"]
+# passo interno, etapa ou None, sem relator? ou None quando não se sabe).
+Item = tuple[str, bool, str, "int | None", str, "str | None", "bool | None"]
 
 
 def categoria(area: str) -> str:
@@ -42,6 +48,41 @@ def categoria(area: str) -> str:
         if area.startswith(prefixo):
             return cat
     return "passo_outro"
+
+
+def _texto(t: str) -> str:
+    return unicodedata.normalize("NFD", t).encode("ascii", "ignore").decode().lower()
+
+
+_DILIGENCIA = re.compile(r"informac|oficio|audiencia|taquigraf|resposta do executivo|cientificado")
+_VOTADO = re.compile(r"deliberado|certidao de votacao|publicar parecer|publicacao do parecer")
+_PAUTA = re.compile(r"pauta|relatado|adiado|\bvistas?\b|pendente de votacao")
+_ESTUDO = ("Relator", "Procuradoria", "Consultoria", "CTEO", "SGP.5")  # relator e assessoria técnica
+
+
+def etapa(area: str, passo: str) -> str | None:
+    """Etapa da matéria na comissão pelo passo interno vigente (as grafias variam).
+
+    "etapa_sem_relator" estima as matérias sem relator, que nenhuma fonte registra antes
+    da coleta diária: as que ainda não tiveram passo interno e as que esperam a
+    designação (ou redesignação) do relator. No retrato de 02/10/2026, a estimativa dá
+    1.170 matérias, e o relatório aponta 1.156 sem relator."""
+    if area == DESCONHECIDO:
+        return None
+    if not area:
+        return "etapa_sem_relator"
+    texto = _texto(f"{area} {passo}")
+    if "designar relator" in texto or "designacao de relator" in texto:
+        return "etapa_sem_relator"
+    if _DILIGENCIA.search(texto):
+        return "etapa_diligencia"
+    if _VOTADO.search(texto):
+        return "etapa_votado"
+    if _PAUTA.search(texto):
+        return "etapa_pauta"
+    if area.startswith(_ESTUDO):
+        return "etapa_estudo"
+    return "etapa_outra"
 
 
 def idade(recebido: datetime | None, instante: datetime) -> tuple[str, int | None]:
@@ -60,13 +101,15 @@ def agregar(data: str, itens: Iterable[Item], comissoes: list[str],
     """Uma linha por comissão (mais TODAS) × grupo ("todas" e "projetos")."""
     cont: dict[tuple, dict] = defaultdict(lambda: defaultdict(int))
     idades: dict[tuple, list] = defaultdict(list)
-    for comissao, projeto, faixa, dias, passo, sem_relator in itens:
+    for comissao, projeto, faixa, dias, passo, fase, sem_relator in itens:
         for chave in ((comissao, "todas"), (TODAS, "todas"), (comissao, "projetos"),
                       (TODAS, "projetos"))[: 4 if projeto else 2]:
             c = cont[chave]
             c["materias"] += 1
             c[faixa] += 1
             c[passo] += 1
+            if fase:
+                c[fase] += 1
             c["sem_relator"] += bool(sem_relator)
             if dias is not None:
                 idades[chave].append(dias)
@@ -113,8 +156,10 @@ def calcular(presencas: list[Presenca], inicio: date, fim: date) -> list[dict]:
             else:
                 faixa, dias = idade(recebimentos[i], instante)
             k = bisect_right(datas_passos[i], fim_dia) - 1
-            passo = categoria(p.passos[k].area) if k >= 0 else "passo_desconhecido"
-            itens.append((p.comissao, projetos[i], faixa, dias, passo, None))
+            vigente = p.passos[k] if k >= 0 else None
+            passo = categoria(vigente.area) if vigente else "passo_desconhecido"
+            fase = etapa(vigente.area, vigente.passo) if vigente else None
+            itens.append((p.comissao, projetos[i], faixa, dias, passo, fase, None))
         linhas += agregar(str(d), itens, comissoes)
         d += timedelta(days=1)
     return linhas

@@ -42,6 +42,15 @@ const PASSO = [
   { campos: ["passo_consultoria"], nome: "Consultoria", cor: "--s5" },
   { campos: ["passo_outro", "passo_nenhum", "passo_desconhecido"], nome: "Outros ou sem passo", cor: "--cinza-1" },
 ];
+// Etapa da tramitação pelo último passo interno, na ordem do processo (reconstrucao/serie.py).
+const ETAPA = [
+  { campos: ["etapa_sem_relator"], nome: "Sem relator", cor: "--s1" },
+  { campos: ["etapa_estudo"], nome: "Em estudo", cor: "--s2" },
+  { campos: ["etapa_diligencia"], nome: "Em diligência", cor: "--s3" },
+  { campos: ["etapa_pauta"], nome: "Na pauta", cor: "--s4" },
+  { campos: ["etapa_votado"], nome: "Votada", cor: "--s5" },
+  { campos: ["etapa_outra", "passo_desconhecido"], nome: "Outros ou desconhecido", cor: "--cinza-1" },
+];
 
 const DIA = 864e5;
 const MARGEM_DIREITA = 56;  // igual em todos os cartões, para os eixos de tempo se alinharem
@@ -396,6 +405,44 @@ function graficoEmpilhado(alvo, datas, camadas, opcoes) {
   }));
 }
 
+// Várias linhas na mesma escala. `pontos` marca cada dia da série (útil quando ela é curta).
+function graficoLinhas(alvo, datas, series, opcoes) {
+  const c = cores();
+  const largura = alvo.clientWidth;
+  const longo = series.flatMap((s) => datas.map((d, i) => ({ d, v: s.valores[i], s: s.nome })).filter((p) => p.v != null));
+  const m = moldura(c, datas, largura, opcoes.altura,
+                    { yDomain: [0, d3.max(longo, (p) => p.v) || 1], marginRight: MARGEM_DIREITA });
+  // Valor no fim de cada linha; rótulos que se encostariam são afastados na vertical.
+  const altura = opcoes.altura - 22 - 26;
+  const topo = d3.scaleLinear().domain([0, d3.max(longo, (p) => p.v) || 1]).nice().domain()[1];
+  const finais = series.map((s) => longo.filter((p) => p.s === s.nome).pop()).filter(Boolean)
+    .sort((a, b) => b.v - a.v);
+  let anterior = -Infinity;
+  for (const p of finais) {
+    const y = Math.max((1 - p.v / topo) * altura, anterior + 13);
+    p.vRotulo = (1 - y / altura) * topo;
+    anterior = y;
+  }
+  const svg = Plot.plot({
+    ...m.opcoes,
+    color: { domain: series.map((s) => s.nome), range: series.map((s) => c.v(s.cor)) },
+    marks: [
+      ...m.eixos,
+      ...marcos(datas, c, opcoes.inicioColeta, largura),
+      Plot.lineY(longo, { x: "d", y: "v", z: "s", stroke: "s", strokeWidth: 2, strokeLinejoin: "round", strokeLinecap: "round" }),
+      ...series.filter((s) => s.pontos).map((s) => Plot.dot(longo.filter((p) => p.s === s.nome),
+        { x: "d", y: "v", r: 3, fill: c.v(s.cor), stroke: c.superficie, strokeWidth: 1.5 })),
+      Plot.text(finais, { x: "d", y: "vRotulo", text: (p) => fmt(p.v), dx: 8, textAnchor: "start", fill: c.tinta, fontWeight: 600 }),
+    ],
+  });
+  descrever(svg, opcoes.descricao);
+  alvo.replaceChildren(svg);
+  interagir(alvo, svg, datas, (i) => ({
+    linhas: series.filter((s) => s.valores[i] != null).map((s) => ({ cor: c.v(s.cor), valor: fmt(s.valores[i]),
+      nome: opcoes.total?.[i] ? `${s.nome} (${porcentoInteiro(s.valores[i] / opcoes.total[i])} do acervo)` : s.nome })),
+  }));
+}
+
 function legenda(cartao, camadas) {
   const c = cores();
   const ul = cartao.querySelector(".legenda");
@@ -522,15 +569,40 @@ function renderEvolucao(j, serie, fluxos) {
       formato: (v) => (v == null ? "—" : `${fmt(v)}`), descricao: resumo(`Idade mediana, em dias, ${nomeComissao}`, datas, mediana) });
   }
 
-  // Passo interno
+  // Passo interno: pela etapa da tramitação ou pela área
   const cPasso = document.getElementById("c-passo");
-  const camadasPasso = PASSO.map((k) => ({ ...k, valores: datas.map((_, i) => soma(serie, k.campos, i0 + i)) }));
+  const porEtapa = (cPasso.dataset.modo || "etapa") === "etapa";
+  for (const b of cPasso.querySelectorAll(".alternador button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.modo === (porEtapa ? "etapa" : "area")));
+    b.onclick = () => { cPasso.dataset.modo = b.dataset.modo; render(); };
+  }
+  document.getElementById("sub-passo").textContent = porEtapa
+    ? "Etapa de cada matéria na comissão, pelo último passo interno."
+    : "Área do último passo interno de cada matéria na comissão.";
+  document.getElementById("nota-passo").hidden = !porEtapa;
+  const camadasPasso = (porEtapa ? ETAPA : PASSO).map((k) => ({ ...k, valores: datas.map((_, i) => soma(serie, k.campos, i0 + i)) }));
   legenda(cPasso, camadasPasso);
-  acoes(cPasso, datas, camadasPasso, arquivo("passo"));
+  acoes(cPasso, datas, camadasPasso, arquivo(porEtapa ? "etapa" : "passo"));
   if (cPasso.dataset.tabela !== "1") {
     graficoEmpilhado(cPasso.querySelector(".grafico"), datas, camadasPasso, {
       altura: 300, inicioColeta: j.inicio_coleta,
-      descricao: `Matérias ${nomeComissao} pela área do passo interno. ` + resumo("Com o relator", datas, camadasPasso[0].valores) });
+      descricao: `Matérias ${nomeComissao} pela ${porEtapa ? "etapa da tramitação" : "área do passo interno"}. ` +
+        resumo(camadasPasso[0].nome, datas, camadasPasso[0].valores) });
+  }
+
+  // Sem relator: estimativa pelo passo interno e, desde a coleta diária, o número do relatório
+  const cSemRelator = document.getElementById("c-sem-relator");
+  const estimativa = fatia("etapa_sem_relator");
+  const seriesSemRelator = [
+    { nome: "estimativa pelo passo interno", valores: estimativa, cor: "--s1", linha: true },
+    { nome: "relatório do SPLEGIS", valores: fatia("sem_relator"), cor: "--s2", linha: true, pontos: true },
+  ];
+  legenda(cSemRelator, seriesSemRelator);
+  acoes(cSemRelator, datas, seriesSemRelator, arquivo("sem-relator"));
+  if (cSemRelator.dataset.tabela !== "1") {
+    graficoLinhas(cSemRelator.querySelector(".grafico"), datas, seriesSemRelator, {
+      altura: 260, inicioColeta: j.inicio_coleta, total: fatia("materias"),
+      descricao: resumo(`${nomeGrupo} sem relator ${nomeComissao} (estimativa)`, datas, estimativa) });
   }
 
   renderFluxos(fluxos, { comissao: nomeComissao, grupo: nomeGrupo });

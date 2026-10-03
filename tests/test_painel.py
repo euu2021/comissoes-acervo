@@ -5,9 +5,10 @@ import unittest
 from painel.__main__ import colunas, serie_real
 
 
-def linha(comissao, rotulo, desde, ate="", recebido="2026-09-01T10:00:00", relator="", area="Relator(a)"):
+def linha(comissao, rotulo, desde, ate="", recebido="2026-09-01T10:00:00", relator="", area="Relator(a)",
+          passo="Estudo para manifestação do relator"):
     return {"comissao": comissao, "rotulo": rotulo, "desde": desde, "ate": ate,
-            "recebido_em": recebido, "relator_codigo": relator, "interna_area": area}
+            "recebido_em": recebido, "relator_codigo": relator, "interna_area": area, "interna_tipo": passo}
 
 
 class TestSerieReal(unittest.TestCase):
@@ -16,7 +17,7 @@ class TestSerieReal(unittest.TestCase):
         coletas = [{"data": "2026-10-02", "coletado_em": "2026-10-03T02:48:17-03:00"},
                    {"data": "2026-10-03", "coletado_em": "2026-10-03T21:47:00-03:00"}]
         historico = [linha("CCJ", "PL 1/2026", "2026-10-02", relator="123"),
-                     linha("CCJ", "DOCREC 1/2020", "2026-10-02", area=""),
+                     linha("CCJ", "DOCREC 1/2020", "2026-10-02", area="", passo=""),
                      linha("FIN", "PL 2/2026", "2026-10-02", ate="2026-10-02", recebido=""),
                      linha("FIN", "PL 3/2026", "2026-10-03", recebido="")]
         self.linhas = {(l["data"], l["comissao"], l["grupo"]): l for l in serie_real(coletas, historico)}
@@ -32,6 +33,10 @@ class TestSerieReal(unittest.TestCase):
         self.assertEqual(self.linhas[("2026-10-02", "CCJ", "todas")]["relatores"], "1")
         self.assertEqual(self.linhas[("2026-10-02", "FIN", "todas")]["relatores"], "0")
         self.assertEqual(self.linhas[("2026-10-03", "FIN", "todas")]["pendentes"], "1")
+
+    def test_etapas(self):
+        self.assertEqual(self.linhas[("2026-10-02", "CCJ", "todas")]["etapa_sem_relator"], "1")
+        self.assertEqual(self.linhas[("2026-10-02", "CCJ", "todas")]["etapa_estudo"], "1")
 
     def test_idade_conta_no_instante_da_coleta(self):
         # Recebida em 01/09 às 10h, coletada em 03/10 às 02h48: 31 dias completos.

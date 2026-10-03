@@ -49,8 +49,8 @@ def serie_real(coletas: list[dict], historico: list[dict]) -> list[dict]:
             recebido = datetime.fromisoformat(h["recebido_em"]) if h["recebido_em"] else None
             faixa, dias = S.idade(recebido, instante)
             projeto = h["rotulo"].split()[0] in S.PROJETOS
-            itens.append((h["comissao"], projeto, faixa, dias,
-                          S.categoria(h["interna_area"]), not h["relator_codigo"]))
+            itens.append((h["comissao"], projeto, faixa, dias, S.categoria(h["interna_area"]),
+                          S.etapa(h["interna_area"], h["interna_tipo"]), not h["relator_codigo"]))
             if h["relator_codigo"]:
                 for comissao in (h["comissao"], S.TODAS):
                     for grupo in ("todas", "projetos") if projeto else ("todas",):

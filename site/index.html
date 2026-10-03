@@ -258,13 +258,32 @@
     <figure class="cartao" id="c-passo">
       <div class="cartao-topo">
         <div>
-          <h2>Em que passo da tramitação interna estão</h2>
-          <p class="sub">Área do último passo interno de cada matéria na comissão.</p>
+          <h2>Em que ponto da tramitação interna estão</h2>
+          <p class="sub" id="sub-passo"></p>
+        </div>
+        <div class="controles">
+          <div class="alternador" role="group" aria-label="Agrupar por">
+            <button type="button" data-modo="etapa">Etapa</button><button type="button" data-modo="area">Área</button>
+          </div>
+          <div class="acoes"></div>
+        </div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico" id="nota-passo">Sem relator: ainda sem passo interno ou à espera da designação do relator. Em estudo: com o relator ou na assessoria técnica (Procuradoria e Consultoria). Em diligência: à espera de informações do Executivo ou do autor, de ofício ou de audiência pública. Na pauta: em condição de pauta, relatada, adiada, retirada de pauta ou com vista. Votada: deliberada, com certidão de votação ou parecer a publicar.</p>
+    </figure>
+
+    <figure class="cartao" id="c-sem-relator">
+      <div class="cartao-topo">
+        <div>
+          <h2>Matérias sem relator</h2>
+          <p class="sub">Nenhuma fonte guarda quem era o relator no passado. A estimativa conta as matérias sem passo interno na comissão ou à espera da designação do relator; desde 02/10/2026, o relatório do SPLEGIS dá o número exato.</p>
         </div>
         <div class="acoes"></div>
       </div>
       <ul class="legenda"></ul>
       <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico">No retrato de 02/10/2026, a estimativa deu 202 projetos sem relator e o relatório, 180 (1.170 e 1.156, contando todas as matérias). Quase toda a diferença está na CCJ (35 contra 17): lá, às vezes o relator é designado sem que se lance um passo novo, e o último passo continua sendo "Designar Relator".</p>
     </figure>
 
     <figure class="cartao" id="c-rotas">
@@ -294,6 +313,7 @@
         <li><strong>Consulta pública.</strong> Três vezes por dia, um robô lê o relatório <a href="https://splegisconsulta.saopaulo.sp.leg.br/Relatorio/IndexComissaoProjetoTramitacaoInterna" target="_blank" rel="noopener">Projetos em Análise nas Comissões</a> do SPLEGIS, com todas as matérias das sete comissões.</li>
         <li><strong>Normalização.</strong> Cada matéria vira uma linha com a tramitação externa (data, origem, recebimento) e a interna (data, área e estado) separadas, o relator e os autores, com os prefeitos agrupados em Executivo e as composições da Mesa em Mesa Diretora.</li>
         <li><strong>Indicadores.</strong> A idade conta dias completos desde o recebimento pela comissão (ou desde a entrada no estado atual), nas faixas de até 30, 31 a 90, 91 a 180, 181 a 365 e mais de 365 dias. Matérias enviadas e ainda não recebidas fazem parte do acervo, como no relatório.</li>
+        <li><strong>Etapas.</strong> O último passo interno de cada matéria indica em que etapa ela está: sem relator, em estudo, em diligência, na pauta ou votada. Antes da coleta diária, é assim que se estima quantas estavam sem relator.</li>
         <li><strong>Entradas e saídas.</strong> Cada passagem de uma matéria por uma comissão vai do envio a ela até o envio para outra área, com a origem e o destino. Desde o início da coleta diária, a hora e o destino de cada saída vêm das tramitações que o SPLEGIS registra no dia.</li>
         <li><strong>Série histórica.</strong> Cada retrato fica guardado. O período de novembro de 2018 a outubro de 2026 foi reconstruído a partir dos eventos de tramitação que o SPLEGIS registra dia a dia e conferido contra o histórico oficial das matérias (<a href="https://github.com/prototiposlegisla/comissoes-acervo/blob/main/dados/reconstrucao/README.md">método e validação</a>).</li>
       </ol>

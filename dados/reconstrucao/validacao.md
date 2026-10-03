@@ -1,6 +1,6 @@
 # Validação da reconstrução
 
-- Eventos de 2018-10-26 a 2026-10-02; série de 2018-11-01 a 2026-10-02; retrato-âncora de 2026-10-03T02:48:17.
+- Eventos de 2018-10-26 a 2026-10-02; série de 2018-11-01 a 2026-10-02; retrato-âncora de 2026-10-03T06:53:36.
 - Eventos do feed: 427.296 (interna 204.958. envio 106.944. receb 99.387. outro 10.400. excl_envio 2.908. excl_interna 1.955. excl_receb 744).
 - Matérias que passaram por comissões: 11.589; presenças: 25.364.
 - Correções na fonte: {'recebimento suspeito confirmado': 1984, 'recebimento suspeito não resolvido (mantido)': 123, 'recebimento suspeito sem id': 2, 'recebimento suspeito sem histórico': 98, 'recebimento com dia/mês trocados (movido)': 51, 'excl_receb desconsiderada': 155, 'excl_envio desconsiderada': 16}.

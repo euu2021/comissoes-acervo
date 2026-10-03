@@ -6,7 +6,7 @@ from datetime import date
 from reconstrucao.eventos import Evento, interpretar, recebimentos_suspeitos
 from reconstrucao.linha_do_tempo import (DESCONHECIDO, Passo, Presenca, completar_com_historico,
                                          marcar_desconhecidos, presencas, trechos)
-from reconstrucao.serie import calcular, categoria
+from reconstrucao.serie import calcular, categoria, etapa
 
 
 def ev(t, rotulo="PL 1/2026", **kw):
@@ -175,6 +175,22 @@ class TestSerie(unittest.TestCase):
         self.assertEqual(categoria(""), "passo_nenhum")
         self.assertEqual(categoria(DESCONHECIDO), "passo_desconhecido")
 
+    def test_etapas(self):
+        casos = {("", ""): "etapa_sem_relator",
+                 ("Presidente da Comissão", "Redesignar Relator"): "etapa_sem_relator",
+                 ("Secretaria", "Aguardando Designação de Relator"): "etapa_sem_relator",
+                 ("Procuradoria", "Para análise e envio ao(à) relator(a)"): "etapa_estudo",
+                 ("Consultoria (SGP.52)", "Elaborar Minuta de Relatório"): "etapa_estudo",
+                 ("Relator(a)", "Assinar Pedido de Informação ao Executivo"): "etapa_diligencia",
+                 ("Secretaria (SGP12)", "Aguardando 2ª Audiência Pública"): "etapa_diligencia",
+                 ("Secretaria (SGP12)", "Em Condição de Pauta"): "etapa_pauta",
+                 ("Comissão", "Vistas"): "etapa_pauta",
+                 ("Secretaria", "Aguardando Publicação do Parecer"): "etapa_votado",
+                 ("Secretaria", "Aguardando Requerimento de Retirada"): "etapa_outra",
+                 (DESCONHECIDO, DESCONHECIDO): None}
+        for (area, passo), esperado in casos.items():
+            self.assertEqual(etapa(area, passo), esperado, (area, passo))
+
     def test_idade_e_pendencia(self):
         p = Presenca("CCJ", "PL 1/2026", "2026-08-01T10:00:00", "2026-08-10T09:00:00", "SGP22",
                      "2026-08-01T10:00:00", "2026-08-03T12:00:00", "FIN",
@@ -182,6 +198,7 @@ class TestSerie(unittest.TestCase):
         linhas = {(l["data"], l["grupo"]): l for l in calcular([p], date(2026, 8, 1), date(2026, 8, 10))
                   if l["comissao"] == "CCJ"}
         self.assertEqual(linhas[("2026-08-01", "projetos")]["pendentes"], "1")
+        self.assertEqual(linhas[("2026-08-01", "projetos")]["etapa_sem_relator"], "1")  # ainda sem passo
         self.assertEqual(linhas[("2026-08-04", "projetos")]["idade_ate30"], "1")
         self.assertEqual(linhas[("2026-08-04", "projetos")]["mediana_dias"], "1")
         self.assertEqual(linhas[("2026-08-10", "todas")]["materias"], "0")
