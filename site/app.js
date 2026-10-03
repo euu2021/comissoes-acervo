@@ -42,6 +42,10 @@ const PASSO = [
   { campos: ["passo_consultoria"], nome: "Consultoria", cor: "--s5" },
   { campos: ["passo_outro", "passo_nenhum", "passo_desconhecido"], nome: "Outros ou sem passo", cor: "--cinza-1" },
 ];
+// Cor de cada comissão nos gráficos que as comparam: paleta categórica validada, em ordem fixa
+// e a mesma em todos os gráficos. "Todas" é a linha tracejada, na cor do texto.
+const COR_COMISSAO = { CCJ: "--s1", FIN: "--s2", URB: "--s3", ADM: "--s4", ECON: "--s5", EDUC: "--s6", SAUDE: "--s7" };
+const rotuloComissao = (s) => (s === "TODAS" ? "Todas" : s === "SAUDE" ? "SAÚDE" : s);
 // Etapa da tramitação pelo último passo interno, na ordem do processo (reconstrucao/serie.py).
 const ETAPA = [
   { campos: ["etapa_sem_relator"], nome: "Sem relator", cor: "--s1" },
@@ -352,6 +356,7 @@ function acoesTabela(cartao, colunas, linhas, arquivo, { recentesPrimeiro = true
 // ----------------------------------------------------------------------------- gráficos
 function graficoLinha(alvo, datas, valores, opcoes) {
   const c = cores();
+  const cor = opcoes.cor ? c.v(opcoes.cor) : c.s1;
   const largura = alvo.clientWidth;
   const pontos = datas.map((d, i) => ({ d, v: valores[i] })).filter((p) => p.v != null);
   const ultimo = pontos.slice(-1);
@@ -362,9 +367,9 @@ function graficoLinha(alvo, datas, valores, opcoes) {
     marks: [
       ...m.eixos,
       ...(opcoes.marcos ? marcos(datas, c, opcoes.inicioColeta, largura) : []),
-      ...(opcoes.area ? [Plot.areaY(pontos, { x: "d", y: "v", fill: c.s1, fillOpacity: 0.1 })] : []),
-      Plot.lineY(pontos, { x: "d", y: "v", stroke: c.s1, strokeWidth: 2, strokeLinejoin: "round", strokeLinecap: "round" }),
-      Plot.dot(ultimo, { x: "d", y: "v", r: 4, fill: c.s1, stroke: c.superficie, strokeWidth: 2 }),
+      ...(opcoes.area ? [Plot.areaY(pontos, { x: "d", y: "v", fill: cor, fillOpacity: 0.1 })] : []),
+      Plot.lineY(pontos, { x: "d", y: "v", stroke: cor, strokeWidth: 2, strokeLinejoin: "round", strokeLinecap: "round" }),
+      Plot.dot(ultimo, { x: "d", y: "v", r: 4, fill: cor, stroke: c.superficie, strokeWidth: 2 }),
       ...(opcoes.rotuloFinal ? [Plot.text(ultimo, { x: "d", y: "v", text: (p) => fmt(p.v), dx: 8,
                                                    textAnchor: "start", fill: c.tinta, fontWeight: 600 })] : []),
     ],
@@ -372,7 +377,7 @@ function graficoLinha(alvo, datas, valores, opcoes) {
   descrever(svg, opcoes.descricao);
   alvo.replaceChildren(svg);
   interagir(alvo, svg, datas, (i) => ({
-    linhas: [{ cor: c.s1, valor: opcoes.formato(valores[i]), nome: opcoes.nome }],
+    linhas: [{ cor, valor: opcoes.formato(valores[i]), nome: opcoes.nome }],
   }));
 }
 
@@ -515,7 +520,7 @@ function renderMultiplos(j, i0, i1) {
     mini.setAttribute("role", "button");
     mini.setAttribute("aria-label", `Ver ${nome} em detalhe`);
     const topo = el("div", "mini-topo");
-    const h3 = el("h3", null, `${sigla} `);
+    const h3 = el("h3", null, `${rotuloComissao(sigla)} `);
     h3.append(el("span", null, nome.split(",")[0]));
     topo.append(h3, el("span", "valor-mini", fmt(valores[valores.length - 1])));
     const grafico = el("div", "grafico");
@@ -525,7 +530,7 @@ function renderMultiplos(j, i0, i1) {
     mini.addEventListener("click", escolher);
     mini.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); escolher(); } });
     graficoLinha(grafico, datas, valores, { altura: 120, area: true, yTicks: 3, marginLeft: 40, marginRight: 12,
-      nome: "matérias",
+      nome: "matérias", cor: COR_COMISSAO[sigla],
       formato: fmt, descricao: resumo(`Acervo da ${sigla}`, datas, valores) });
   }
 }
@@ -578,7 +583,7 @@ function renderEvolucao(j, serie, fluxos, tramitacao) {
 
   // Passo interno: pela etapa da tramitação ou pela área
   const cPasso = document.getElementById("c-passo");
-  const porEtapa = (cPasso.dataset.modo || "etapa") === "etapa";
+  const porEtapa = cPasso.dataset.modo === "etapa";
   for (const b of cPasso.querySelectorAll(".alternador button")) {
     b.setAttribute("aria-pressed", String(b.dataset.modo === (porEtapa ? "etapa" : "area")));
     b.onclick = () => { cPasso.dataset.modo = b.dataset.modo; render(); };
@@ -696,54 +701,85 @@ function renderComposicao(f, j, i0, i1, nomes) {
       resumo(camadas[camadas.length - 1]?.nome ?? "", datas, camadas[camadas.length - 1]?.valores ?? []) });
 }
 
-// Linhas de várias séries, uma em destaque e as outras em cinza, com o nome no fim de cada uma.
+// Com uma comissão escolhida, a linha dela engrossa e as das outras se apagam.
+function estiloComissao(c, destaque) {
+  return (sigla) => {
+    if (sigla === "TODAS") return { cor: c.tinta, largura: destaque === "TODAS" ? 2.5 : 1.75, opacidade: 1, traco: "5 3" };
+    const escolhida = sigla === destaque;
+    return { cor: c.v(COR_COMISSAO[sigla]), largura: escolhida ? 3 : 1.75,
+             opacidade: destaque === "TODAS" || escolhida ? 1 : 0.35, traco: null };
+  };
+}
+
+// Linhas das comissões e de "Todas", com um ponto e o nome no fim de cada uma; nomes que se
+// encostariam são afastados na vertical. px e py dão a posição de um ponto {x, y} na tela.
+function marcasComissoes(c, curvas, destaque, pontosDe, px, py) {
+  const estilo = estiloComissao(c, destaque);
+  const peso = (sigla) => (sigla === destaque ? 3 : sigla === "TODAS" ? 2 : destaque === "TODAS" ? 1 : 0);
+  const ordem = [...curvas].sort((a, b) => peso(a.sigla) - peso(b.sigla));
+  const fins = ordem.map((cv) => ({ ...pontosDe(cv).pop(), sigla: cv.sigla })).filter((p) => p.y != null);
+  const postos = [];
+  for (const r of [...fins].sort((a, b) => py(a) - py(b))) {
+    let y = py(r);
+    for (const p of postos) if (Math.abs(p.x - px(r)) < 44 && y < p.y + 13) y = p.y + 13;
+    postos.push({ x: px(r), y });
+    r.dy = y - py(r);
+  }
+  return [
+    ...ordem.map((cv) => {
+      const e = estilo(cv.sigla);
+      return Plot.line(pontosDe(cv), { x: "x", y: "y", stroke: e.cor, strokeWidth: e.largura, strokeOpacity: e.opacidade,
+        ...(e.traco ? { strokeDasharray: e.traco } : {}), strokeLinejoin: "round", strokeLinecap: "round" });
+    }),
+    ...fins.map((p) => {
+      const e = estilo(p.sigla);
+      return Plot.dot([p], { x: "x", y: "y", r: 3, fill: e.cor, fillOpacity: e.opacidade, stroke: c.superficie, strokeWidth: 1 });
+    }),
+    ...fins.map((p) => Plot.text([p], { x: "x", y: "y", dx: 7, dy: p.dy, text: () => rotuloComissao(p.sigla), textAnchor: "start",
+      fontSize: 11, fill: p.sigla === destaque ? c.tinta : c.tinta2, fontWeight: p.sigla === destaque ? 600 : 400 })),
+  ];
+}
+
+// Dica com o valor de cada comissão num ponto: a escolhida primeiro, as outras do maior ao menor.
+function linhasDaDica(c, curvas, destaque, valor, formato) {
+  const estilo = estiloComissao(c, destaque);
+  const nome = (s) => (s === "TODAS" ? "todas as comissões" : rotuloComissao(s));
+  const presentes = curvas.filter((cv) => valor(cv) != null);
+  const escolhida = presentes.find((cv) => cv.sigla === destaque);
+  const outras = presentes.filter((cv) => cv !== escolhida).sort((a, b) => valor(b) - valor(a));
+  return [...(escolhida ? [escolhida] : []), ...outras]
+    .map((cv) => ({ cor: estilo(cv.sigla).cor, valor: formato(valor(cv)), nome: nome(cv.sigla) }));
+}
+
+function legendaComissoes(cartao) {
+  legenda(cartao, [...Object.entries(COR_COMISSAO).map(([sigla, cor]) => ({ nome: rotuloComissao(sigla), cor, linha: true })),
+                   { nome: "Todas as comissões", cor: "--tinta", tracejada: true }]);
+}
+
 function graficoComparado(alvo, datas, curvas, opcoes) {
   const c = cores();
   const largura = alvo.clientWidth;
-  const pontos = (cv) => datas.map((d, i) => ({ d, v: cv.valores[i], g: cv.sigla })).filter((p) => p.v != null);
-  const destaque = curvas.find((cv) => cv.sigla === opcoes.destaque);
-  const referencia = opcoes.destaque === "TODAS" ? null : curvas.find((cv) => cv.sigla === "TODAS");
-  const fundo = curvas.filter((cv) => cv !== destaque && cv.sigla !== "TODAS");
   const maximo = d3.max(curvas, (cv) => d3.max(cv.valores)) || 1;
   const m = moldura(c, datas, largura, opcoes.altura, { yDomain: [0, maximo], marginRight: MARGEM_DIREITA });
-  // Nome no fim de cada curva, afastando os que se encostariam.
-  const altura = opcoes.altura - 22 - 26;
   const topo = d3.scaleLinear().domain([0, maximo]).nice().domain()[1];
-  const rotulos = [destaque, ...(referencia ? [referencia] : []), ...fundo]
-    .map((cv) => ({ ...pontos(cv).pop(), texto: cv.nome, destaque: cv === destaque })).filter((r) => r.v != null)
-    .sort((a, b) => b.v - a.v);
-  let anterior = -Infinity;
-  for (const r of rotulos) {
-    const y = Math.max((1 - r.v / topo) * altura, anterior + 13);
-    r.vr = (1 - y / altura) * topo;
-    anterior = y;
-  }
+  const [d0, d1] = [datas[0], datas[datas.length - 1]];
+  const px = (p) => ((p.x - d0) / (d1 - d0)) * (largura - 48 - MARGEM_DIREITA);
+  const py = (p) => (1 - p.y / topo) * (opcoes.altura - 22 - 26);
+  const pontosDe = (cv) => datas.map((d, i) => ({ x: d, y: cv.valores[i] })).filter((p) => p.y != null);
   const svg = Plot.plot({
     ...m.opcoes,
     marks: [
       ...m.eixos,
       Plot.ruleY([100], { stroke: c.tinta3, strokeDasharray: "3 3", strokeOpacity: 0.8 }),
       ...marcos(datas, c, opcoes.inicioColeta, largura),
-      Plot.line(fundo.flatMap(pontos), { x: "d", y: "v", z: "g", stroke: c.v("--cinza-2"), strokeWidth: 1.25 }),
-      ...(referencia ? [Plot.line(pontos(referencia), { x: "d", y: "v", stroke: c.tinta3, strokeWidth: 1.5, strokeDasharray: "4 3" })] : []),
-      Plot.line(pontos(destaque), { x: "d", y: "v", stroke: c.s1, strokeWidth: 2, strokeLinejoin: "round" }),
-      Plot.text(rotulos.filter((r) => !r.destaque), { x: "d", y: "vr", text: "texto", dx: 6, textAnchor: "start", fontSize: 11, fill: c.tinta3 }),
-      Plot.text(rotulos.filter((r) => r.destaque), { x: "d", y: "vr", text: "texto", dx: 6, textAnchor: "start", fontSize: 11,
-        fill: c.tinta, fontWeight: 600 }),
+      ...marcasComissoes(c, curvas, opcoes.destaque, pontosDe, px, py),
     ],
   });
   descrever(svg, opcoes.descricao);
   alvo.replaceChildren(svg);
-  interagir(alvo, svg, datas, (i) => {
-    const outras = [...(referencia ? [referencia] : []), ...fundo].filter((cv) => cv.valores[i] != null)
-      .sort((a, b) => b.valores[i] - a.valores[i]);
-    return {
-      linhas: [
-        ...(destaque.valores[i] != null ? [{ cor: c.s1, valor: fmt(Math.round(destaque.valores[i])), nome: destaque.nome }] : []),
-        ...outras.map((cv) => ({ cor: cv === referencia ? c.tinta3 : c.v("--cinza-2"), valor: fmt(Math.round(cv.valores[i])), nome: cv.nome })),
-      ],
-    };
-  });
+  interagir(alvo, svg, datas, (i) => ({
+    linhas: linhasDaDica(c, curvas, opcoes.destaque, (cv) => cv.valores[i], (v) => fmt(Math.round(v))),
+  }));
 }
 
 function renderBase100(j, i0, i1) {
@@ -758,10 +794,7 @@ function renderBase100(j, i0, i1) {
   document.getElementById("sub-base100").textContent =
     `Tamanho do acervo de cada comissão, com o primeiro dia do período (${dataBR(datas[0])}) valendo 100: ` +
     "150 é metade a mais; 50, a metade.";
-  const nomeDestaque = estado.comissao === "TODAS" ? "Todas as comissões" : curvas.find((cv) => cv.sigla === estado.comissao).nome;
-  legenda(cartao, [{ nome: nomeDestaque, cor: "--s1", linha: true },
-    ...(estado.comissao === "TODAS" ? [] : [{ nome: "Todas as comissões", cor: "--tinta-3", tracejada: true }]),
-    { nome: estado.comissao === "TODAS" ? "Cada comissão" : "Demais comissões", cor: "--cinza-2", linha: true }]);
+  legendaComissoes(cartao);
   acoes(cartao, datas, curvas.map((cv) => ({ nome: cv.nome, valores: cv.valores.map((v) => (v == null ? null : Math.round(v))) })),
         `base100-${estado.grupo}-${estado.periodo}.csv`);
   if (cartao.dataset.tabela === "1") return;
@@ -1036,28 +1069,15 @@ function graficoPermanencia(alvo, curvas, opcoes) {
   const c = cores();
   const largura = alvo.clientWidth;
   const ate = d3.max(curvas, (cv) => cv.ultimo);
-  const pontos = (cv) => Array.from({ length: cv.ultimo + 1 }, (_, t) => ({ t, v: cv.s[t], g: cv.sigla }));
   const destaque = curvas.find((cv) => cv.sigla === opcoes.destaque);
-  const fundo = curvas.filter((cv) => cv !== destaque && cv.sigla !== "TODAS");
-  const referencia = opcoes.destaque === "TODAS" ? null : curvas.find((cv) => cv.sigla === "TODAS");
   const margens = { marginTop: 16, marginRight: MARGEM_DIREITA, marginBottom: 26, marginLeft: 48 };
-  const px = (t) => (t * (largura - margens.marginLeft - margens.marginRight)) / ate;
-  const py = (v) => (1 - v) * (opcoes.altura - margens.marginTop - margens.marginBottom);
+  const px = (p) => (p.x * (largura - margens.marginLeft - margens.marginRight)) / ate;
+  const py = (p) => (1 - p.y) * (opcoes.altura - margens.marginTop - margens.marginBottom);
+  const pontosDe = (cv) => Array.from({ length: cv.ultimo + 1 }, (_, t) => ({ x: t, y: cv.s[t] }));
   const ticks = [];
-  for (const [t] of MARCOS_DIAS) if (t <= ate && (!ticks.length || px(t) - px(ticks[ticks.length - 1]) >= 64)) ticks.push(t);
-  // Sigla no fim de cada curva; rótulos que se encostariam são afastados na vertical.
-  const nomeCurto = (s) => (s === "TODAS" ? "Todas" : s === "SAUDE" ? "SAÚDE" : s);
-  const rotulos = [destaque, ...(referencia ? [referencia] : []), ...fundo]
-    .map((cv) => ({ t: cv.ultimo, v: cv.s[cv.ultimo], texto: nomeCurto(cv.sigla), destaque: cv === destaque }))
-    .sort((a, b) => b.v - a.v);
-  const postos = [];
-  for (const r of rotulos) {
-    let y = py(r.v);
-    for (const p of postos) if (Math.abs(px(p.t) - px(r.t)) < 44 && y < p.y + 13) y = p.y + 13;
-    postos.push({ t: r.t, y });
-    r.v = 1 - y / py(0);
-  }
+  for (const [t] of MARCOS_DIAS) if (t <= ate && (!ticks.length || px({ x: t }) - px({ x: ticks[ticks.length - 1] }) >= 64)) ticks.push(t);
   const med = destaque.mediana;
+  const corDestaque = estiloComissao(c, opcoes.destaque)(opcoes.destaque).cor;
   const svg = Plot.plot({
     width: largura, height: opcoes.altura, ...margens,
     style: { fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontSize: "12px",
@@ -1072,39 +1092,23 @@ function graficoPermanencia(alvo, curvas, opcoes) {
                    fill: c.tinta3, label: null }),
       Plot.ruleY([0], { stroke: c.base }),
       Plot.ruleY([0.5], { stroke: c.tinta3, strokeDasharray: "3 3", strokeOpacity: 0.8 }),
-      Plot.line(fundo.flatMap(pontos), { x: "t", y: "v", z: "g", stroke: c.v("--cinza-2"), strokeWidth: 1.25 }),
-      ...(referencia ? [Plot.line(pontos(referencia), { x: "t", y: "v", stroke: c.tinta3, strokeWidth: 1.5,
-                                                        strokeDasharray: "4 3" })] : []),
-      Plot.line(pontos(destaque), { x: "t", y: "v", stroke: c.s1, strokeWidth: 2, strokeLinejoin: "round" }),
-      Plot.text(rotulos.filter((r) => !r.destaque), { x: "t", y: "v", text: "texto", dx: 5, textAnchor: "start",
-        fontSize: 11, fill: c.tinta3 }),
-      Plot.text(rotulos.filter((r) => r.destaque), { x: "t", y: "v", text: "texto", dx: 5, textAnchor: "start",
-        fontSize: 11, fill: c.tinta, fontWeight: 600 }),
+      ...marcasComissoes(c, curvas, opcoes.destaque, pontosDe, px, py),
       ...(med != null ? [
-        Plot.dot([{ t: med, v: 0.5 }], { x: "t", y: "v", r: 4, fill: c.s1, stroke: c.superficie, strokeWidth: 2 }),
+        Plot.dot([{ t: med, v: 0.5 }], { x: "t", y: "v", r: 4.5, fill: corDestaque, stroke: c.superficie, strokeWidth: 2 }),
         Plot.text([{ t: med, v: 0.5 }], { x: "t", y: "v", dy: -12, fill: c.tinta, fontWeight: 600,
           // perto do fim do eixo, o texto vai para a esquerda do ponto
           ...(med > ate * 0.6 ? { dx: -8, textAnchor: "end" } : { dx: 8, textAnchor: "start" }),
-          text: () => `metade saiu em ${rotuloDias(med)}`, stroke: c.superficie, strokeWidth: 3, paintOrder: "stroke" }),
+          text: () => `${rotuloComissao(opcoes.destaque)}: metade saiu em ${rotuloDias(med)}`,
+          stroke: c.superficie, strokeWidth: 3, paintOrder: "stroke" }),
       ] : []),
     ],
   });
   descrever(svg, opcoes.descricao);
   alvo.replaceChildren(svg);
-  const dias = d3.range(0, ate + 1);
-  interagir(alvo, svg, dias, (t) => {
-    const valor = (cv) => (t <= cv.ultimo ? cv.s[t] : null);
-    const nome = (s) => (s === "TODAS" ? "todas as comissões" : s === "SAUDE" ? "SAÚDE" : s);
-    const outras = [...(referencia ? [referencia] : []), ...fundo]
-      .filter((cv) => valor(cv) != null).sort((a, b) => valor(b) - valor(a));
-    return {
-      titulo: t === 0 ? "Ainda na comissão no dia da chegada" : `Ainda na comissão depois de ${rotuloDias(t)}`,
-      linhas: [
-        ...(valor(destaque) != null ? [{ cor: c.s1, valor: porcentoInteiro(valor(destaque)), nome: nome(destaque.sigla) }] : []),
-        ...outras.map((cv) => ({ cor: cv === referencia ? c.tinta3 : c.v("--cinza-2"), valor: porcentoInteiro(valor(cv)), nome: nome(cv.sigla) })),
-      ],
-    };
-  });
+  interagir(alvo, svg, d3.range(0, ate + 1), (t) => ({
+    titulo: t === 0 ? "Ainda na comissão no dia da chegada" : `Ainda na comissão depois de ${rotuloDias(t)}`,
+    linhas: linhasDaDica(c, curvas, opcoes.destaque, (cv) => (t <= cv.ultimo ? cv.s[t] : null), porcentoInteiro),
+  }));
 }
 
 function renderPermanencia(f, nomes) {
@@ -1114,10 +1118,7 @@ function renderPermanencia(f, nomes) {
   document.getElementById("sub-permanencia").textContent =
     `Das passagens que começaram ${PERIODO_TEXTO[estado.periodo]}, quantas ainda estavam na comissão depois de cada tempo. ` +
     "A linha tracejada marca a metade: onde a curva a cruza está o tempo mediano.";
-  const nomeDestaque = estado.comissao === "TODAS" ? "Todas as comissões" : estado.comissao === "SAUDE" ? "SAÚDE" : estado.comissao;
-  legenda(cartao, [{ nome: nomeDestaque, cor: "--s1", linha: true },
-    ...(estado.comissao === "TODAS" ? [] : [{ nome: "Todas as comissões", cor: "--tinta-3", linha: true, tracejada: true }]),
-    { nome: estado.comissao === "TODAS" ? "Cada comissão" : "Demais comissões", cor: "--cinza-2", linha: true }]);
+  legendaComissoes(cartao);
   const ate = d3.max(curvas, (cv) => cv.ultimo);
   const dias = MARCOS_DIAS.map(([t]) => t).filter((t) => t > 0 && t <= ate);
   const nome = (s) => (s === "TODAS" ? "todas" : s === "SAUDE" ? "SAÚDE" : s);
@@ -1381,7 +1382,7 @@ function diasDoCalendario(lista, inicio) {
 
 function renderCalendario(t, ultimoDia) {
   const cartao = document.getElementById("c-calendario");
-  const metrica = cartao.dataset.metrica === "passos" ? "passos" : "votos";
+  const metrica = cartao.dataset.metrica === "votos" ? "votos" : "passos";
   for (const b of cartao.querySelectorAll(".alternador button")) {
     b.setAttribute("aria-pressed", String(b.dataset.metrica === metrica));
     b.onclick = () => { cartao.dataset.metrica = b.dataset.metrica; renderCalendario(t, ultimoDia); };
@@ -1525,6 +1526,7 @@ function mostrarAba() {
   document.getElementById("painel-evolucao").hidden = retrato;
   document.getElementById("painel-retrato").hidden = !retrato;
   document.getElementById("filtro-periodo").hidden = retrato;  // o retrato é sempre do último dia
+  document.querySelector('.atalhos a[data-aba="retrato"]').hidden = !retrato;  // "Por autor" é do retrato
 }
 
 async function render() {
