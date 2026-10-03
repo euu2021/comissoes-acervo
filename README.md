@@ -8,7 +8,7 @@ O SPLEGIS mostra só o retrato do momento. Este repositório tira um retrato por
 
 **Situação:** coleta diária automática desde 02/10/2026, mais uma reconstrução do acervo de novembro de 2018 até essa data.
 
-**Autoria:** criado e mantido por [André Marcon](mailto:andremarcon@saopaulo.sp.leg.br) e Kauê.
+**Autoria:** criado e mantido por [André Marcon](mailto:andremarcon@saopaulo.sp.leg.br) e Kauê Negrão.
 
 ## Como funciona
 
