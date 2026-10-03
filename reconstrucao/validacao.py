@@ -24,7 +24,7 @@ def estado_final(presencas: dict[str, list[Presenca]], ancoras: dict[str, dict],
     datas de envio e recebimento; e último passo interno, quando veio do feed."""
     cont: Counter = Counter()
     exemplos: dict[str, list] = defaultdict(list)
-    for rotulo in set(presencas) | set(ancoras):
+    for rotulo in sorted(set(presencas) | set(ancoras)):
         abertas = [p for p in presencas.get(rotulo, []) if p.ate is None]
         prevista = abertas[0] if abertas else None
         real = ancoras.get(rotulo)

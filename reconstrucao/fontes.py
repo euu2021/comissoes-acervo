@@ -121,7 +121,7 @@ def historico(materia_id: str) -> list[tuple[str, str, str]]:
         _gravar(caminho, texto)
     linhas = []
     for row in reversed(json.loads(texto)["data"]):  # a fonte vem do mais novo ao mais antigo
-        cel = [html.unescape(re.sub(r"<[^>]+>", "", html.unescape(c))).strip()
+        cel = [html.unescape(re.sub(r"<[^>]+>", "", html.unescape(c))).replace("\r\n", "\n").strip()
                if isinstance(c, str) else "" for c in row]
         linhas.append((cel[0][:19], cel[1], cel[3]))
     linhas.sort(key=lambda l: l[0])

@@ -60,8 +60,12 @@ def _passo_interno(resto: str, tipo: str) -> dict | None:
             "passo": passo.strip(), "comentario": "".join(comentario).strip()}
 
 
+def _linhas(texto: str) -> str:
+    return texto.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
 def interpretar(texto: str) -> dict:
-    corpo = _RX_PREFIXO.sub("", texto, count=1).strip()
+    corpo = _RX_PREFIXO.sub("", _linhas(texto), count=1).strip()
     if corpo.startswith(_INTERNA):
         if campos := _passo_interno(corpo[len(_INTERNA):], "interna"):
             return campos
@@ -100,7 +104,7 @@ def carregar(inicio: date, fim: date, ate: str) -> tuple[list[Evento], dict[str,
         for item in fontes.eventos_do_dia(d):
             rotulo = f"{item['Sigla']} {item['Numero']}/{item['Ano']}"
             fichas[rotulo] = FichaFeed(item["Tipo"], item["Sigla"], item["Numero"], item["Ano"],
-                                       (item.get("Ementa") or "").strip(), item.get("Autores") or [])
+                                       _linhas(item.get("Ementa") or ""), item.get("Autores") or [])
             for e in item["Eventos"]:
                 t = e["Data"][:19]
                 if t <= ate:
