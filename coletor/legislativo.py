@@ -9,6 +9,9 @@ webservice do SPLEGIS (https://splegisws.saopaulo.sp.leg.br/ws/ws2.asmx):
   encerrados.csv       como terminou cada projeto encerrado: lei, veto, arquivamento...
                        (ProjetosEncerrados)
   projetos_por_ano.csv quantos projetos de cada tipo foram apresentados por ano (ProjetosPorAno)
+  assuntos.csv         assuntos de cada projeto, no vocabulário da Câmara (ProjetosAssuntos)
+  filiacoes.csv        partidos de cada vereador, com as datas (VereadoresCMSP)
+  cargos_comissoes.csv presidentes, vices e membros das 7 comissões, com as datas (VereadoresCMSP)
 
 Cada execução refaz os anos pedidos (pelo ano do projeto) e mantém os demais.
 
@@ -35,6 +38,12 @@ CAMPOS_RELATORIAS = ["rotulo", "comissao", "despacho", "despachado_em", "relator
                      "parecer_em", "conclusao"]
 CAMPOS_ENCERRADOS = ["rotulo", "tipo", "ano", "leitura", "encerramento", "motivo"]
 CAMPOS_CONTAGEM = ["ano", "tipo", "projetos"]
+CAMPOS_ASSUNTOS = ["rotulo", "assuntos"]
+CAMPOS_FILIACOES = ["vereador", "partido", "inicio", "fim"]
+CAMPOS_CARGOS = ["comissao", "cargo", "vereador", "inicio", "fim"]
+# Comissões permanentes no cadastro de cargos, pelo nome (as extraordinárias ficam de fora).
+_NOMES_COMISSOES = [("JUSTIÇA", "CCJ"), ("FINANÇAS", "FIN"), ("POLÍTICA URBANA", "URB"), ("ADMINISTRAÇÃO PÚBLICA", "ADM"),
+                    ("TRÂNSITO", "ECON"), ("EDUCAÇÃO", "EDUC"), ("SAÚDE", "SAUDE")]
 _RX_PARTIDO = re.compile(r"\(([^()]+)\)\s*$")
 
 
@@ -73,6 +82,30 @@ def encerrados(itens: list[dict]) -> list[dict]:
              "motivo": (p.get("motivo") or "").strip()} for p in itens]
 
 
+def assuntos(itens: list[dict]) -> list[dict]:
+    return [{"rotulo": f"{p['tipo']} {p['numero']}/{p['ano']}",
+             "assuntos": " | ".join(dict.fromkeys(a["texto"].strip() for a in p.get("assuntos") or [] if a.get("texto")))}
+            for p in itens if p.get("assuntos")]
+
+
+def vereadores(itens: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(filiações partidárias, cargos nas 7 comissões permanentes) de cada vereador."""
+    filiacoes, cargos = [], []
+    for v in itens:
+        for f in v.get("filiacoes") or []:
+            filiacoes.append({"vereador": v["nome"], "partido": (f.get("partido") or {}).get("sigla", ""),
+                              "inicio": _data(f.get("inicio")), "fim": _data(f.get("fim"))})
+        for c in v.get("cargos") or []:
+            ente = ((c.get("ente") or {}).get("nome") or "").upper()
+            if not ente.startswith("COMISSÃO - COMISSÃO DE") or "EXTRA" in ente:
+                continue
+            sigla = next((s for chave, s in _NOMES_COMISSOES if chave in ente), None)
+            if sigla:
+                cargos.append({"comissao": sigla, "cargo": c.get("nome", ""), "vereador": v["nome"],
+                               "inicio": _data(c.get("inicio")), "fim": _data(c.get("fim"))})
+    return filiacoes, cargos
+
+
 def _ano(rotulo: str) -> int:
     return int(rotulo.rsplit("/", 1)[1])
 
@@ -98,10 +131,17 @@ def main(argv: list[str] | None = None) -> int:
     gravar_csv(C.DIR_DADOS / "areas.csv", CAMPOS_AREAS, areas)
     log(f"areas.csv: {len(areas)} áreas")
 
-    rel, enc, cont = [], [], []
+    filiacoes, cargos = vereadores(_json("VereadoresCMSPJSON"))
+    gravar_csv(C.DIR_DADOS / "filiacoes.csv", CAMPOS_FILIACOES, sorted(filiacoes, key=lambda f: (f["vereador"], f["inicio"])))
+    gravar_csv(C.DIR_DADOS / "cargos_comissoes.csv", CAMPOS_CARGOS,
+               sorted(cargos, key=lambda c: (c["comissao"], c["inicio"], c["cargo"], c["vereador"])))
+    log(f"vereadores: {len(filiacoes)} filiações, {len(cargos)} cargos nas comissões")
+
+    rel, enc, cont, ass = [], [], [], []
     for ano in anos:
         for tipo in TIPOS:
             rel += relatorias(_json(f"ProjetosReunioesDeComissaoJSON?ano={ano}&tipo={tipo}"))
+            ass += assuntos(_json(f"ProjetosAssuntosJSON?ano={ano}&tipo={tipo}"))
         enc += [e for e in encerrados(_json(f"ProjetosEncerradosJSON?ano={ano}")) if e["tipo"] in TIPOS]
         if ano in anos_contagem:
             por_tipo: dict[str, int] = {}
@@ -114,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
     feitos = set(anos)
     _refazer(C.DIR_DADOS / "relatorias.csv", CAMPOS_RELATORIAS, rel, feitos, lambda l: _ano(l["rotulo"]))
     _refazer(C.DIR_DADOS / "encerrados.csv", CAMPOS_ENCERRADOS, enc, feitos, lambda l: int(l["ano"]))
+    _refazer(C.DIR_DADOS / "assuntos.csv", CAMPOS_ASSUNTOS, ass, feitos, lambda l: _ano(l["rotulo"]))
     _refazer(C.DIR_DADOS / "projetos_por_ano.csv", CAMPOS_CONTAGEM, cont, set(anos_contagem), lambda l: int(l["ano"]))
     return 0
 

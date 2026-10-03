@@ -282,6 +282,17 @@
       <ul class="legenda"></ul>
       <div class="grafico" tabindex="0"></div>
     </figure>
+    <figure class="cartao" id="c-assuntos" data-curto="Assuntos">
+      <div class="cartao-topo">
+        <div>
+          <h2>Assuntos dos projetos que chegaram</h2>
+          <p class="sub" id="sub-assuntos"></p>
+        </div>
+        <div class="acoes acoes-csv"></div>
+      </div>
+      <ol class="ranking"></ol>
+      <button class="botao mais" type="button"></button>
+    </figure>
     <figure class="cartao" id="c-idade" data-curto="Idade">
       <div class="cartao-topo">
         <div>
@@ -423,6 +434,17 @@
       <ol class="ranking"></ol>
       <button class="botao mais" type="button"></button>
     </figure>
+    <figure class="cartao" id="c-presidentes" data-curto="Presidentes">
+      <div class="cartao-topo">
+        <div>
+          <h2>Quem presidiu as comissões</h2>
+          <p class="sub" id="sub-presidentes"></p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico">O presidente designa os relatores e organiza a pauta das reuniões. Os partidos são os da data em que o mandato na presidência começou, pelas filiações registradas no cadastro de vereadores.</p>
+    </figure>
     <figure class="cartao" id="c-desfechos" data-curto="Desfecho">
       <div class="cartao-topo">
         <div>
@@ -448,7 +470,7 @@
         <li><strong>Indicadores.</strong> A idade conta dias completos desde o recebimento pela comissão (ou desde a entrada no estado atual), nas faixas de até 30, 31 a 90, 91 a 180, 181 a 365 e mais de 365 dias. Matérias enviadas e ainda não recebidas fazem parte do acervo, como no relatório.</li>
         <li><strong>Etapas.</strong> O último passo interno de cada matéria indica em que etapa ela está: sem relator, em estudo, em diligência, na pauta ou votada. Antes da coleta diária, é assim que se estima quantas estavam sem relator.</li>
         <li><strong>Composição.</strong> A legislatura de apresentação sai do ano no número da matéria (o PL 502/2026 é da legislatura 2025–2028). A autoria é a do primeiro autor; os prefeitos são reconhecidos pelo código de autor no SPLEGIS, diferente do que a mesma pessoa tinha como vereador.</li>
-        <li><strong>Relatores e desfechos.</strong> O relator, o parecer e a conclusão de cada projeto em cada comissão, e como o projeto terminou (lei, veto, retirada, arquivamento), vêm do webservice do SPLEGIS, coletados uma vez por dia para os projetos dos últimos oito anos.</li>
+        <li><strong>Relatores e desfechos.</strong> O relator, o parecer e a conclusão de cada projeto em cada comissão, como o projeto terminou (lei, veto, retirada, arquivamento), os assuntos de cada projeto, os presidentes das comissões e as filiações partidárias dos vereadores vêm do webservice do SPLEGIS, coletados uma vez por dia.</li>
         <li><strong>Votações e tempos.</strong> A votação de uma matéria numa comissão é o primeiro passo interno de matéria votada, ou a saída aprovada em reunião conjunta. O tempo de cada etapa vai de um passo ao primeiro passo da etapa seguinte. Desde o início da coleta diária, os passos internos também vêm do feed do SPLEGIS.</li>
         <li><strong>Entradas e saídas.</strong> Cada passagem de uma matéria por uma comissão vai do envio a ela até o envio para outra área, com a origem e o destino. Desde o início da coleta diária, a hora e o destino de cada saída vêm das tramitações que o SPLEGIS registra no dia.</li>
         <li><strong>Série histórica.</strong> Cada retrato fica guardado. O período de novembro de 2018 a outubro de 2026 foi reconstruído a partir dos eventos de tramitação que o SPLEGIS registra dia a dia e conferido contra o histórico oficial das matérias (<a href="https://github.com/prototiposlegisla/comissoes-acervo/blob/main/dados/reconstrucao/README.md">método e validação</a>).</li>

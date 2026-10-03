@@ -1693,7 +1693,26 @@ async function carregarLegislativo() {
 
 // "RICARDO NUNES" -> "Ricardo Nunes"
 const nomeProprio = (t) => t.toLowerCase().split(" ").map((p, i) =>
-  (i && ["da", "das", "de", "do", "dos", "e"].includes(p) ? p : p.charAt(0).toUpperCase() + p.slice(1))).join(" ");
+  (i && ["a", "ao", "as", "com", "da", "das", "de", "do", "dos", "e", "em", "na", "nas", "no", "nos", "o", "os", "para", "por"].includes(p) ? p : p.charAt(0).toUpperCase() + p.slice(1))).join(" ");
+
+// O vocabulário de assuntos da Câmara vem em maiúsculas e sem acento: devolve os acentos das
+// palavras que aparecem entre os assuntos mais frequentes ("-CAO" vira "-ção", "-AO" vira "-ão").
+const ACENTOS = Object.fromEntries(("água alvará área artística assistência auxílio beneficiário calçada cálculo " +
+  "calendário cobrança concessionária condomínio convivência coronavírus criança deficiência diagnóstico doença " +
+  "doméstica doméstico edifício emergência espaço exigência família física físico gênero história honorífica " +
+  "honorífico horário jurídica licença mãe matrícula médica médico móvel munícipe ônibus patrimônio permanência " +
+  "praça prêmio presença proprietário psicológica pública público públicos resíduos salário sanitário saúde " +
+  "segurança serviços sólidos tecnológica título transferência trânsito transparência único usuário veículos " +
+  "violência vítima cão").split(" ").map((p) => [p.normalize("NFD").replace(/[\u0300-\u036f]/g, ""), p]));
+const ASSUNTO_PROPRIO = [[/\bsão paulo\b/, "São Paulo"], [/\banchieta\b/, "Anchieta"], [/\bcovid 19\b/, "Covid-19"],
+  [/\b(iptu|iss|ong)\b/g, (m) => m.toUpperCase()], [/\blgbtqiapn\b/, "LGBTQIAPN+"]];
+function nomeAssunto(termo) {
+  let t = termo.toLowerCase().split(" ").map((p) => ACENTOS[p] ??
+    (p.length > 3 && p.endsWith("cao") ? p.slice(0, -3) + "ção" : p.length > 2 && p.endsWith("ao") ? p.slice(0, -2) + "ão" : p)).join(" ");
+  for (const [rx, troca] of ASSUNTO_PROPRIO) t = t.replace(rx, troca);
+  t = t.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
 
 // Índices [i0, i1) dos meses de `meses` (AAAA-MM) que entram no período escolhido.
 function mesesDoPeriodo(meses) {
@@ -1731,6 +1750,36 @@ function renderPareceres(l, nomes, ultimoDia) {
     descricao: `Pareceres ${onde} por mês e conclusão, ${textoPeriodo()}. ${fmt(soma12)} nos últimos 12 meses completos.` });
 }
 
+// Lista com barras horizontais: itens [{chave, rotulo, extra, n, titulo}], do maior ao menor.
+function preencherRanking(cartao, itens, opcoes) {
+  const todos = cartao.dataset.todos === "1";
+  const mostrar = todos ? itens.slice(0, opcoes.maximoTodos ?? itens.length) : itens.slice(0, PRIMEIRAS_RELATORES);
+  const maximo = itens[0]?.n || 1;
+  const lista = cartao.querySelector(".ranking");
+  lista.replaceChildren(...mostrar.map((it) => {
+    const li = el("li");
+    const rotulo = el("span", "nome", it.rotulo);
+    if (it.extra) rotulo.append(" ", el("small", null, it.extra));
+    const trilho = el("span", "trilho");
+    const barra = el("span", "barra");
+    barra.style.width = `${(100 * it.n) / maximo}%`;
+    trilho.append(barra);
+    li.append(rotulo, trilho, el("span", "valor", opcoes.valor ? opcoes.valor(it) : fmt(it.n)));
+    li.title = it.titulo;
+    return li;
+  }));
+  if (!itens.length) lista.replaceChildren(el("li", "vazio", opcoes.vazio));
+  const limite = Math.min(itens.length, opcoes.maximoTodos ?? itens.length);
+  const mais = cartao.querySelector(".botao.mais");
+  mais.hidden = itens.length <= PRIMEIRAS_RELATORES;
+  mais.textContent = todos ? "Mostrar menos" : `Mostrar ${limite < itens.length ? `os ${fmt(limite)} primeiros` : `todos (${fmt(itens.length)})`}`;
+  mais.onclick = () => { cartao.dataset.todos = todos ? "" : "1"; opcoes.redesenhar(); };
+  const botao = el("button", "botao", "Baixar CSV");
+  botao.type = "button";
+  botao.addEventListener("click", () => baixarTabela(opcoes.cabecalho, itens.map(opcoes.linhaCsv), opcoes.arquivo));
+  cartao.querySelector(".acoes-csv").replaceChildren(botao);
+}
+
 function renderRelatores(l) {
   const cartao = document.getElementById("c-relatores");
   const porPartido = cartao.dataset.modo === "partido";
@@ -1743,48 +1792,105 @@ function renderRelatores(l) {
     : [l.pareceres_por_relator[estado.comissao] ?? []];
   const contagem = new Map();
   for (const lista of listas) {
-    for (let k = 0; k < lista.length; k += 3) {
+    for (let k = 0; k < lista.length; k += 4) {
       if (lista[k] < i0 || lista[k] >= i1) continue;
-      const [nome, partido] = l.relatores[lista[k + 1]];
-      const chave = porPartido ? partido || "sem partido" : `${nome}|${partido}`;
-      contagem.set(chave, (contagem.get(chave) ?? 0) + lista[k + 2]);
+      const chave = porPartido ? l.partidos[lista[k + 2]] : lista[k + 1];
+      contagem.set(chave, (contagem.get(chave) ?? 0) + lista[k + 3]);
     }
   }
-  const linhas = [...contagem].sort((a, b) => b[1] - a[1]);
-  const total = d3.sum(linhas, (x) => x[1]);
+  const total = d3.sum(contagem.values());
+  const itens = [...contagem].sort((a, b) => b[1] - a[1]).map(([chave, n]) => {
+    const [nome, partido] = porPartido ? [chave, ""] : l.relatores[chave];
+    const rotulo = porPartido ? nome : nomeProprio(nome);
+    return { chave, rotulo, extra: partido, n, titulo: `${rotulo}: ${fmt(n)} pareceres (${porcento(n, total)})` };
+  });
   const onde = estado.comissao === "TODAS" ? "nas 7 comissões" : `na ${rotuloComissao(estado.comissao)}`;
   document.getElementById("sub-relatores").textContent = porPartido
-    ? `Pareceres dados ${onde} ${textoPeriodo()}, pelo partido do relator. O partido é o que o SPLEGIS registra hoje para o vereador, que pode não ser o da época.`
-    : `Pareceres dados ${onde} ${textoPeriodo()}, por relator: ${fmt(total)} pareceres de ${fmt(linhas.length)} relatores.`;
-  const todos = cartao.dataset.todos === "1";
-  const mostrar = todos ? linhas : linhas.slice(0, PRIMEIRAS_RELATORES);
-  const maximo = linhas[0]?.[1] || 1;
-  const lista = cartao.querySelector(".ranking");
-  lista.replaceChildren(...mostrar.map(([chave, n]) => {
-    const li = el("li");
-    const [nome, partido] = porPartido ? [chave, ""] : chave.split("|");
-    const rotulo = el("span", "nome", porPartido ? nome : nomeProprio(nome));
-    if (partido) rotulo.append(" ", el("small", null, partido));
-    const trilho = el("span", "trilho");
-    const barra = el("span", "barra");
-    barra.style.width = `${(100 * n) / maximo}%`;
-    trilho.append(barra);
-    li.append(rotulo, trilho, el("span", "valor", fmt(n)));
-    li.title = `${porPartido ? nome : nomeProprio(nome)}: ${fmt(n)} pareceres (${porcento(n, total)})`;
-    return li;
-  }));
-  if (!linhas.length) lista.replaceChildren(el("li", "vazio", "Nenhum parecer neste recorte."));
-  const mais = cartao.querySelector(".botao.mais");
-  mais.hidden = linhas.length <= PRIMEIRAS_RELATORES;
-  mais.textContent = todos ? "Mostrar menos" : `Mostrar todos (${fmt(linhas.length)})`;
-  mais.onclick = () => { cartao.dataset.todos = todos ? "" : "1"; renderRelatores(l); };
-  const csv = cartao.querySelector(".acoes-csv");
-  const botao = el("button", "botao", "Baixar CSV");
-  botao.type = "button";
-  botao.addEventListener("click", () => baixarTabela(porPartido ? ["partido", "pareceres"] : ["relator", "partido", "pareceres"],
-    linhas.map(([chave, n]) => (porPartido ? [chave, n] : [...chave.split("|"), n])),
-    `${porPartido ? "partidos" : "relatores"}-${estado.comissao.toLowerCase()}-${estado.periodo}.csv`));
-  csv.replaceChildren(botao);
+    ? `Pareceres dados ${onde} ${textoPeriodo()}, pelo partido do relator na data do parecer.`
+    : `Pareceres dados ${onde} ${textoPeriodo()}, por relator: ${fmt(total)} pareceres de ${fmt(itens.length)} relatores. Ao lado do nome, o partido de hoje.`;
+  preencherRanking(cartao, itens, {
+    vazio: "Nenhum parecer neste recorte.", redesenhar: () => renderRelatores(l),
+    cabecalho: porPartido ? ["partido na data do parecer", "pareceres"] : ["relator", "partido hoje", "pareceres"],
+    linhaCsv: (it) => (porPartido ? [it.rotulo, it.n] : [it.rotulo, it.extra, it.n]),
+    arquivo: `${porPartido ? "partidos" : "relatores"}-${estado.comissao.toLowerCase()}-${estado.periodo}.csv` });
+}
+
+function renderAssuntos(l) {
+  const cartao = document.getElementById("c-assuntos");
+  const [i0, i1] = mesesDoPeriodo(l.meses);
+  const lista = l.assuntos_por_mes[estado.comissao] ?? [];
+  const contagem = new Map();
+  for (let k = 0; k < lista.length; k += 3) {
+    if (lista[k] < i0 || lista[k] >= i1) continue;
+    contagem.set(lista[k + 1], (contagem.get(lista[k + 1]) ?? 0) + lista[k + 2]);
+  }
+  const chegadas = d3.sum((l.chegadas_com_assunto[estado.comissao] ?? []).slice(i0, i1));
+  const itens = [...contagem].sort((a, b) => b[1] - a[1]).map(([t, n]) => {
+    const rotulo = nomeAssunto(l.assuntos[t]);
+    return { chave: t, rotulo, n, titulo: `${rotulo}: ${fmt(n)} projetos (${porcento(n, chegadas)} dos que chegaram)` };
+  });
+  const onde = estado.comissao === "TODAS" ? "às comissões" : `à ${rotuloComissao(estado.comissao)}`;
+  document.getElementById("sub-assuntos").textContent =
+    `Assuntos dos ${fmt(chegadas)} projetos que chegaram ${onde} ${textoPeriodo()}, no vocabulário que a Câmara usa ` +
+    "para indexar os projetos. Um projeto costuma ter vários assuntos; termos genéricos, como criação ou alteração, ficam de fora.";
+  preencherRanking(cartao, itens, {
+    vazio: "Nenhum projeto com assunto neste recorte.", redesenhar: () => renderAssuntos(l), maximoTodos: 60,
+    valor: (it) => porcento(it.n, chegadas),
+    cabecalho: ["assunto", "projetos", "parte dos que chegaram (%)"],
+    linhaCsv: (it) => [l.assuntos[it.chave], it.n, Math.round((1000 * it.n) / (chegadas || 1)) / 10],
+    arquivo: `assuntos-${estado.comissao.toLowerCase()}-${estado.periodo}.csv` });
+}
+
+// Linha do tempo de quem presidiu cada comissão (ou, numa comissão, presidente e vice).
+function renderPresidentes(l) {
+  const cartao = document.getElementById("c-presidentes");
+  const c = cores();
+  const [inicio, fim] = periodoEscolhido();
+  const uma = estado.comissao !== "TODAS";
+  const linhas = uma ? ["Presidente", "Vice-presidente"] : ORDEM_COMISSOES.map(rotuloComissao);
+  const barras = [];
+  for (const sigla of uma ? [estado.comissao] : ORDEM_COMISSOES) {
+    for (const [cargo, vereador, partido, de, ate] of l.presidentes[sigla] ?? []) {
+      if (!uma && cargo !== "Presidente") continue;
+      const a = new Date(Math.max(utc(de), inicio));
+      const b = new Date(Math.min(ate ? +utc(ate) + DIA : +fim + DIA, +fim + DIA));
+      if (b <= a) continue;
+      barras.push({ linha: uma ? cargo : rotuloComissao(sigla), a, b, nome: nomeProprio(vereador), partido,
+                    titulo: `${nomeProprio(vereador)} (${partido || "sem partido"}), ${cargo.toLowerCase()} da ${rotuloComissao(sigla)} ` +
+                            `de ${dataBR(utc(de))} ${ate ? `a ${dataBR(utc(ate))}` : "até hoje"}` });
+    }
+  }
+  const onde = uma ? `da ${rotuloComissao(estado.comissao)}` : "de cada comissão";
+  document.getElementById("sub-presidentes").textContent =
+    `${uma ? "Presidentes e vices" : "Presidentes"} ${onde} ${textoPeriodo()}, pelo cadastro de cargos da Câmara. ` +
+    "Os traços curtos são substituições de poucos dias. Passe o mouse para ver o nome, o partido na época e as datas.";
+  acoesTabela(cartao, [{ nome: "comissão ou cargo" }, { nome: "vereador" }, { nome: "partido na época" }, { nome: "de" }, { nome: "até" }],
+              barras.map((x) => [x.linha, x.nome, x.partido, dataISO(x.a), dataISO(new Date(x.b - DIA))]),
+              `presidentes-${estado.comissao.toLowerCase()}.csv`, { recentesPrimeiro: false });
+  if (cartao.dataset.tabela === "1") return;
+  const alvo = cartao.querySelector(".grafico");
+  const largura = alvo.clientWidth;
+  const margemEsquerda = uma ? 112 : 60;
+  const util = largura - margemEsquerda - 16;
+  const porMs = util / (fim - inicio + DIA);
+  const datas = [inicio, new Date(+fim + DIA)];
+  const x = eixoX(datas, largura);
+  const svg = Plot.plot({
+    width: largura, height: linhas.length * 38 + 40, marginLeft: margemEsquerda, marginRight: 16, marginTop: 8, marginBottom: 26,
+    style: { fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontSize: "12px",
+             background: "transparent", color: c.tinta3, overflow: "visible" },
+    x: { type: "utc", domain: datas },
+    y: { domain: linhas, padding: 0.18 },
+    marks: [
+      Plot.axisX({ ticks: x.ticks, tickFormat: x.tickFormat, tickSize: 0, tickPadding: 8, fill: c.tinta3, label: null }),
+      Plot.axisY({ tickSize: 0, tickPadding: 8, fill: c.tinta2, label: null }),
+      Plot.barX(barras, { x1: "a", x2: "b", y: "linha", fill: c.s1, insetLeft: 1, insetRight: 1, title: "titulo" }),
+      Plot.text(barras.filter((x) => (x.b - x.a) * porMs > x.nome.length * 6.6 + 10),
+        { x: (x) => new Date((+x.a + +x.b) / 2), y: "linha", text: "nome", fill: "#fff", fontSize: 11, title: "titulo" }),
+    ],
+  });
+  descrever(svg, `Linha do tempo dos ${uma ? "presidentes e vices" : "presidentes"} ${onde}.`);
+  alvo.replaceChildren(svg);
 }
 
 // Barras por ano, a partir de séries anuais (uma lista por categoria).
@@ -1846,15 +1952,18 @@ function renderDesfechos(l) {
 }
 
 function renderLegislativo(l, t, nomes, ultimoDia) {
-  const cartoes = ["c-pareceres", "c-relatores", "c-desfechos", "c-saidas"].map((id) => document.getElementById(id));
+  const cartoes = ["c-pareceres", "c-relatores", "c-desfechos", "c-presidentes", "c-assuntos", "c-saidas"]
+    .map((id) => document.getElementById(id));
   for (const cartao of cartoes) cartao.querySelector(".erro-fluxos")?.remove();
   if (!(t instanceof Error) && t) renderSaidas(t, nomes);
   if (l instanceof Error || !l) {
-    for (const cartao of cartoes.slice(0, 3)) cartao.append(el("p", "vazio erro-fluxos", `Erro ao carregar os dados: ${l?.message ?? ""}`));
+    for (const cartao of cartoes.slice(0, 5)) cartao.append(el("p", "vazio erro-fluxos", `Erro ao carregar os dados: ${l?.message ?? ""}`));
     return;
   }
   renderPareceres(l, nomes, ultimoDia);
   renderRelatores(l);
+  renderPresidentes(l);
+  renderAssuntos(l);
   renderDesfechos(l);
 }
 

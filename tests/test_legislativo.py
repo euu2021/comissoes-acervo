@@ -3,7 +3,7 @@
 import unittest
 
 from coletor.legislativo import encerrados, relatorias
-from painel.legislativo import conclusao, desfecho, montar
+from painel.legislativo import assunto_util, conclusao, desfecho, montar, partido_na_data
 
 
 class TestLegislativo(unittest.TestCase):
@@ -45,9 +45,18 @@ class TestLegislativo(unittest.TestCase):
         k = j["meses"].index("2025-03")
         self.assertEqual(j["pareceres"]["CCJ"]["legalidade"][k], 1)
         self.assertEqual(j["pareceres"]["TODAS"]["legalidade"][k], 1)
-        self.assertEqual(j["pareceres_por_relator"]["CCJ"], [k, 0, 1])  # sem parecer, B não conta
+        self.assertEqual(j["pareceres_por_relator"]["CCJ"], [k, 0, 0, 1])  # sem parecer, B não conta
         a = j["anos"].index(2025)
         self.assertEqual((j["desfechos"]["lei"][a], j["em_tramitacao"][a]), (1, 9))
+
+    def test_partido_na_data_e_assuntos(self):
+        filiacoes = {"FULANO": [("2020-03-11", "S/PARTIDO"), ("2021-06-01", "NOVO"), ("2023-07-25", "PL")]}
+        self.assertEqual(partido_na_data(filiacoes, "FULANO", "2022-01-10T00:00:00"), "NOVO")
+        self.assertEqual(partido_na_data(filiacoes, "FULANO", "2023-07-25T10:00:00"), "PL")
+        self.assertEqual(partido_na_data(filiacoes, "FULANO", "2019-01-01"), "S/PARTIDO")  # antes da primeira
+        self.assertFalse(assunto_util("ALTERACAO"))
+        self.assertFalse(assunto_util("LEI 14.485/2007"))
+        self.assertTrue(assunto_util("PESSOA COM DEFICIENCIA"))
 
 
 if __name__ == "__main__":

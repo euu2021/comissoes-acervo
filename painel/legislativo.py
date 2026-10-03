@@ -5,14 +5,19 @@ partir do que coletor/legislativo.py guarda do webservice do SPLEGIS:
 
 - pareceres: quantos pareceres cada comissão deu por mês, pela conclusão (favorável, pela
   legalidade, pela ilegalidade, contrário, outros);
-- relatores: quantos pareceres cada relator deu em cada comissão, por mês. O partido é o que
-  o SPLEGIS registra hoje para o vereador, não necessariamente o da época;
+- relatores: quantos pareceres cada relator deu em cada comissão, por mês, com o partido do
+  relator na data do parecer (pelas filiações do cadastro de vereadores);
+- presidentes: quem presidiu (e foi vice de) cada comissão, com as datas;
+- assuntos: os assuntos dos projetos que chegaram a cada comissão, por mês, sem os termos
+  genéricos do vocabulário (criação, alteração, prazo...);
 - desfechos: como terminaram os projetos apresentados em cada ano (lei, veto, rejeição,
   retirada, apensamento, arquivamento no fim da legislatura) e quantos seguem em tramitação.
 """
 from __future__ import annotations
 
+import re
 import unicodedata
+from bisect import bisect_right
 from collections import defaultdict
 from datetime import date
 
@@ -21,6 +26,19 @@ from reconstrucao.serie import TODAS
 CONCLUSOES = ["favoravel", "legalidade", "ilegalidade", "contrario", "outros"]
 DESFECHOS = ["lei", "vetado", "rejeitado", "retirado", "apensado", "legislatura", "outros"]
 PRIMEIRO_ANO = 2013
+# Termos do vocabulário que descrevem a ação do projeto, não o assunto.
+GENERICOS = set("""ALTERACAO CRIACAO EVENTOS INFORMACAO DIVULGACAO PARCERIA AUTORIZACAO PRAZO PROIBICAO ACESSO
+INCENTIVO COMBATE PMSP CONVENIO OBRIGATORIEDADE IDENTIFICACAO VALOR ATENDIMENTO SETOR_PRIVADO CONSCIENTIZACAO
+REDUCAO PROTECAO POLITICAS_PUBLICAS FISCALIZACAO CMSP SOCIEDADE_CIVIL ACOMPANHAMENTO PAGAMENTO CADASTRO INSTALACAO
+MULTA PENALIDADE UTILIZACAO MEMBROS ORIENTACAO PERCENTAGEM INCLUSAO PRIORIDADE QUANTIDADE COMPROVACAO APOIO
+COMPETENCIA PARTICIPACAO NORMAS PERIODO DADOS DISPONIBILIDADE RESPONSAVEL CRITERIOS GARANTIA LIMITACAO DESTINACAO
+CONTRATACAO AVALIACAO REVOGACAO FUNCIONAMENTO DENUNCIA DIRETRIZ FORNECIMENTO VALORIZACAO ORGAOS_PUBLICOS
+ORGAOS_MUNICIPAIS RISCOS MANUTENCAO VAGA COMERCIALIZACAO PRESTACAO_DE_SERVICO AUMENTO PROGRAMA REQUISITOS AMPLIACAO
+RELATORIO TREINAMENTO RESPONSABILIDADE BENEFICIO VENDA AQUISICAO ENCAMINHAMENTO IDADE INTEGRACAO PREVENCAO
+SEGURANCA GRATUIDADE ISENCAO EMPRESA PLACA IMOVEL RECURSOS_FINANCEIROS CURSOS COMUNICACAO PUBLICIDADE CONSTRUCAO
+SERVIDOR HOMENAGEM""".replace("_", " ").split()) | {"SETOR PRIVADO", "POLITICAS PUBLICAS", "SOCIEDADE CIVIL",
+    "ORGAOS PUBLICOS", "ORGAOS MUNICIPAIS", "PRESTACAO DE SERVICO", "RECURSOS FINANCEIROS"}
+_RX_NORMA = re.compile(r"^(LEI|DECRETO|EMENDA|RESOLUCAO|PORTARIA)\b")
 
 
 def _texto(t: str) -> str:
@@ -57,13 +75,32 @@ def desfecho(motivo: str) -> str:
     return "outros"
 
 
-def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict], fim: str) -> dict:
+def partido_na_data(filiacoes: dict[str, list[tuple]], vereador: str, data: str) -> str:
+    """Partido do vereador na data, pelas filiações (a mais recente que começou até lá)."""
+    lista = filiacoes.get(vereador, [])
+    k = bisect_right(lista, (data[:10] + "~",)) - 1
+    return lista[k][1] if k >= 0 else (lista[0][1] if lista else "")
+
+
+def assunto_util(termo: str) -> bool:
+    return bool(termo) and termo not in GENERICOS and not _RX_NORMA.match(termo)
+
+
+def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict], fim: str,
+           filiacoes: list[dict] = (), cargos: list[dict] = (), assuntos: list[dict] = (),
+           passagens: list[dict] = ()) -> dict:
     meses = []
     m = date(2018, 11, 1)
     while m.isoformat()[:7] <= fim[:7]:
         meses.append(m.isoformat()[:7])
         m = date(m.year + m.month // 12, m.month % 12 + 1, 1)
     pos = {mes: i for i, mes in enumerate(meses)}
+    por_vereador: dict[str, list[tuple]] = defaultdict(list)
+    for f in filiacoes:
+        por_vereador[f["vereador"]].append((f["inicio"][:10], f["partido"]))
+    for lista in por_vereador.values():
+        lista.sort()
+    partidos: dict[str, int] = {}
 
     comissoes = sorted({r["comissao"] for r in relatorias})
     pareceres = {c: {k: [0] * len(meses) for k in CONCLUSOES} for c in [*comissoes, TODAS]}
@@ -77,8 +114,10 @@ def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict],
         for c in (r["comissao"], TODAS):
             pareceres[c][k][i] += 1
         if r["relator"]:
-            idx = relatores.setdefault((r["relator"], r["partido"]), len(relatores))
-            por_relator[r["comissao"]][(i, idx)] += 1
+            idx = relatores.setdefault(r["relator"], len(relatores))
+            na_epoca = partido_na_data(por_vereador, r["relator"], r["parecer_em"]) or r["partido"]
+            p = partidos.setdefault(na_epoca or "sem partido", len(partidos))
+            por_relator[r["comissao"]][(i, idx, p)] += 1
 
     anos = list(range(PRIMEIRO_ANO, int(fim[:4]) + 1))
     apresentados = defaultdict(int)
@@ -90,13 +129,53 @@ def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict],
         if ano in anos:
             desfechos[desfecho(e["motivo"])][anos.index(ano)] += 1
     encerrados_ano = [sum(desfechos[k][i] for k in DESFECHOS) for i in range(len(anos))]
+
+    hoje = fim[:10]
+    atual = {v: partido_na_data(por_vereador, v, hoje) for v in relatores}
+    presidentes = defaultdict(list)
+    for c in sorted(cargos, key=lambda c: c["inicio"]):
+        if c["cargo"] in ("Presidente", "Vice-presidente") and (not c["fim"] or c["fim"] >= "2013-01-01"):
+            presidentes[c["comissao"]].append([c["cargo"], c["vereador"], partido_na_data(por_vereador, c["vereador"], c["inicio"]),
+                                               c["inicio"][:10], c["fim"][:10]])
+
+    # Assuntos dos projetos pela chegada a cada comissão (e, em TODAS, pela primeira chegada).
+    termos_por = {a["rotulo"]: [t for t in a["assuntos"].split(" | ") if assunto_util(t)] for a in assuntos}
+    # Só os 300 assuntos mais frequentes: a cauda longa do vocabulário pesaria no arquivo sem aparecer na lista.
+    frequencia = defaultdict(int)
+    for lista in termos_por.values():
+        for t in lista:
+            frequencia[t] += 1
+    principais = set(sorted(frequencia, key=lambda t: -frequencia[t])[:300])
+    termos_por = {r: [t for t in lista if t in principais] for r, lista in termos_por.items()}
+    termos: dict[str, int] = {}
+    por_assunto: dict[str, dict[tuple, int]] = defaultdict(lambda: defaultdict(int))
+    chegadas: dict[str, list[int]] = defaultdict(lambda: [0] * len(meses))
+    primeira: dict[str, str] = {}
+    for p in passagens:
+        if p["desde"] and p["rotulo"] in termos_por:
+            primeira[p["rotulo"]] = min(primeira.get(p["rotulo"], p["desde"]), p["desde"])
+    entradas = [(p["comissao"], p["rotulo"], p["desde"]) for p in passagens if p["desde"] and p["rotulo"] in termos_por]
+    entradas += [(TODAS, r, d) for r, d in primeira.items()]
+    for comissao, rotulo, desde in entradas:
+        if desde[:7] not in pos:
+            continue
+        i = pos[desde[:7]]
+        chegadas[comissao][i] += 1
+        for t in termos_por[rotulo]:
+            por_assunto[comissao][(i, termos.setdefault(t, len(termos)))] += 1
     return {
         "meses": meses,
         "pareceres": pareceres,
-        "relatores": [list(r) for r in relatores],
-        # por comissão: [mês, relator, pareceres, mês, relator, pareceres, ...]
-        "pareceres_por_relator": {c: [v for (i, idx), n in sorted(d.items()) for v in (i, idx, n)]
+        "relatores": [[r, atual[r]] for r in relatores],  # nome e partido de hoje
+        "partidos": list(partidos),
+        # por comissão: [mês, relator, partido na época, pareceres, ...]
+        "pareceres_por_relator": {c: [v for (i, idx, p), n in sorted(d.items()) for v in (i, idx, p, n)]
                                   for c, d in por_relator.items()},
+        "presidentes": presidentes,  # por comissão: [cargo, vereador, partido no início, início, fim]
+        "assuntos": list(termos),
+        # por comissão: [mês, assunto, projetos que chegaram, ...]; chegadas: projetos com assunto por mês
+        "assuntos_por_mes": {c: [v for (i, t), n in sorted(d.items()) for v in (i, t, n)] for c, d in por_assunto.items()},
+        "chegadas_com_assunto": chegadas,
         "anos": anos,
         "apresentados": [apresentados.get(a) for a in anos],
         "desfechos": desfechos,
