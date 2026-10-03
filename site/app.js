@@ -153,7 +153,7 @@ function marcos(datas, c, inicioColeta, largura) {
   const [d0, d1] = [datas[0], datas[datas.length - 1]];
   const lista = LEGISLATURAS.map((iso) => ({ d: utc(iso), texto: "nova legislatura" }));
   lista.unshift({ d: utc(inicioColeta), texto: "início da coleta diária" });  // o primeiro a ganhar texto
-  // Eventos de dados/eventos.csv (pandemia, eleições...), em linha pontilhada e com menos prioridade.
+  // Eventos de dados/eventos.csv (como a pandemia), em linha pontilhada e com menos prioridade.
   for (const ev of cache.eventos ?? []) lista.push({ d: utc(ev.data), texto: ev.texto, descricao: ev.descricao, evento: true });
   const visiveis = lista.filter((m) => m.d > d0 && m.d <= d1);
   // O texto vai à direita da linha (à esquerda no fim do eixo) ou, se não couber, do outro lado.

@@ -35,7 +35,7 @@ Todos os arquivos estão em UTF-8, separados por vírgula. As datas seguem o for
 | [`dados/relatorias.csv`](dados/relatorias.csv) | Relator, parecer e conclusão de cada projeto (PL, PDL, PR, PLO) apresentado desde 2013 em cada comissão permanente, por despacho. |
 | [`dados/encerrados.csv`](dados/encerrados.csv) | Como terminou cada projeto encerrado desde 2013: promulgado, vetado, retirado, arquivado etc. |
 | [`dados/projetos_por_ano.csv`](dados/projetos_por_ano.csv) | Quantos projetos de cada tipo foram apresentados por ano. |
-| [`dados/eventos.csv`](dados/eventos.csv) | Eventos marcados nos gráficos de tempo (pandemia, eleições...): `data`, `texto` curto do marco e `descricao`. Editado à mão. |
+| [`dados/eventos.csv`](dados/eventos.csv) | Eventos marcados nos gráficos de tempo (como a pandemia): `data`, `texto` curto do marco e `descricao`. Editado à mão. |
 | [`dados/areas.csv`](dados/areas.csv) | Nome de cada área de tramitação do SPLEGIS (`SGP21` = Equipe de Apoio ao Plenário etc.). |
 | [`dados/assuntos.csv`](dados/assuntos.csv) | Assuntos de cada projeto apresentado desde 2013, no vocabulário que a Câmara usa para indexar os projetos. |
 | [`dados/filiacoes.csv`](dados/filiacoes.csv) | Partidos de cada vereador, com as datas de filiação. Dá o partido do relator na data do parecer. |
