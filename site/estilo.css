@@ -84,6 +84,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }  /* vale também para elementos com display definido aqui */
 
 html { -webkit-text-size-adjust: 100%; }
 
@@ -199,3 +200,64 @@ h1 { margin: 4px 0 8px; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; le
   .filtros .tema { margin-left: 0; }
   .cartao { padding: 14px 12px 10px; }
 }
+
+/* abas */
+.abas { display: flex; gap: 4px; border-bottom: 1px solid var(--borda); }
+.abas button { font: inherit; font-size: 15px; font-weight: 600; padding: 8px 14px; margin-bottom: -1px;
+  border: 0; border-bottom: 2px solid transparent; background: none; color: var(--tinta-2); cursor: pointer; }
+.abas button:hover { color: var(--tinta); }
+.abas button[aria-selected="true"] { color: var(--tinta); border-bottom-color: var(--s1); }
+.abas button:focus-visible, .alternador button:focus-visible, .barra-linha:focus-visible,
+.busca input:focus-visible, .lista th button:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+
+/* retrato do dia */
+.nota-retrato { margin: 0 0 12px; color: var(--tinta-2); font-size: 14px; }
+.controles { display: flex; flex-wrap: wrap; gap: 8px; }
+.alternador { display: inline-flex; border: 1px solid var(--borda); border-radius: 8px; overflow: hidden; }
+.alternador button { font: inherit; font-size: 13px; padding: 6px 12px; border: 0; background: var(--superficie);
+  color: var(--tinta-2); cursor: pointer; }
+.alternador button + button { border-left: 1px solid var(--borda); }
+.alternador button[aria-pressed="true"] { background: var(--realce); color: var(--tinta); font-weight: 600; }
+.busca { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--tinta-2); }
+.busca input { font: inherit; font-size: 14px; color: var(--tinta); background: var(--superficie);
+  border: 1px solid var(--borda); border-radius: 8px; padding: 6px 10px; min-width: 220px; }
+.barras { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 2px; }
+.barra-linha { display: grid; grid-template-columns: minmax(150px, 30%) 1fr 5ch; align-items: center; gap: 12px;
+  width: 100%; padding: 5px 8px; border: 0; border-radius: 6px; background: transparent; color: inherit;
+  font: inherit; text-align: left; cursor: pointer; }
+.barra-linha:hover { background: var(--realce); }
+.barra-linha[aria-pressed="true"] { background: var(--realce); box-shadow: inset 3px 0 0 var(--s1); }
+.barra-nome { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barra-nome .grupo { margin-left: 6px; color: var(--tinta-3); font-size: 12px; }
+.barra-nome.especial { font-style: italic; }
+.barra-trilho { display: flex; gap: 2px; height: 14px; min-width: 0; }
+.seg { height: 100%; min-width: 2px; flex: 0 1 auto; }
+.seg:last-child { border-radius: 0 4px 4px 0; }
+.seg.escolhido { outline: 2px solid var(--tinta); outline-offset: 1px; }
+.barra-valor { text-align: right; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.vazio { margin: 12px 0 0; color: var(--tinta-3); font-size: 14px; }
+.cartao > .botao.mais { margin-top: 10px; font-size: 13px; }
+.dica-barras { position: fixed; }
+
+/* lista de matérias */
+.lista { max-height: none; }
+.lista th, .lista td { text-align: left; vertical-align: top; white-space: normal; }
+.lista th button { font: inherit; font-weight: 600; color: inherit; background: none; border: 0; padding: 0;
+  cursor: pointer; text-align: left; }
+.lista th button::after { content: ""; margin-left: 4px; }
+.lista th[aria-sort="descending"] button::after { content: "↓"; }
+.lista th[aria-sort="ascending"] button::after { content: "↑"; }
+.lista td.num { text-align: right; white-space: nowrap; }
+.lista td.materia { white-space: nowrap; }
+.lista td.ementa { min-width: 260px; max-width: 460px; }
+.lista .ementa span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.lista .muted { color: var(--tinta-3); }
+
+@media (max-width: 600px) {
+  .barra-linha { grid-template-columns: 1fr auto; gap: 4px 8px; }
+  .barra-trilho { grid-column: 1 / -1; grid-row: 2; }
+  .busca input { min-width: 0; width: 100%; }
+  .busca { display: flex; }
+}
+#r-lista, .barras-cartao { scroll-margin-top: 96px; }
+@media (max-width: 600px) { #r-lista, .barras-cartao { scroll-margin-top: 12px; } }

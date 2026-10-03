@@ -83,7 +83,7 @@ python -m painel                    # gera site/dados/ a partir de dados/
 python -m http.server -d site 8000  # abre o painel em http://localhost:8000
 ```
 
-O painel ([`site/`](site/)) é publicado no GitHub Pages pelo workflow [`painel.yml`](.github/workflows/painel.yml), a cada push e depois de cada coleta. Ele junta a série reconstruída com a dos retratos reais, calculada com a mesma regra, e usa [Observable Plot](https://observablehq.com/plot/) e [D3](https://d3js.org/) (licença ISC, copiados em `site/vendor/`).
+O painel ([`site/`](site/)) tem duas visões: a **Evolução**, com as séries diárias desde 2018, e o **Retrato do dia**, com o acervo atual por relator, por passo da tramitação interna e por autor ou partido, e a lista das matérias de cada recorte, com links para o SPLEGIS. É publicado no GitHub Pages pelo workflow [`painel.yml`](.github/workflows/painel.yml), a cada push e depois de cada coleta. Ele junta a série reconstruída com a dos retratos reais, calculada com a mesma regra, e usa [Observable Plot](https://observablehq.com/plot/) e [D3](https://d3js.org/) (licença ISC, copiados em `site/vendor/`).
 
 Se o SPLEGIS bloquear o acesso a partir do GitHub, o coletor respeita as variáveis de ambiente `HTTPS_PROXY`/`HTTP_PROXY`. Basta defini-las no workflow a partir de um secret.
 

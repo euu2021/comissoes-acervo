@@ -22,8 +22,13 @@
     <p class="atualizacao" id="atualizacao"></p>
   </header>
 
+  <div class="abas" role="tablist" aria-label="Visões do painel">
+    <button type="button" role="tab" id="aba-evolucao" aria-controls="painel-evolucao" aria-selected="true">Evolução</button>
+    <button type="button" role="tab" id="aba-retrato" aria-controls="painel-retrato" aria-selected="false">Retrato do dia</button>
+  </div>
+
   <nav class="filtros" aria-label="Filtros do painel">
-    <label>Período <select id="f-periodo"></select></label>
+    <label id="filtro-periodo">Período <select id="f-periodo"></select></label>
     <label>Comissão <select id="f-comissao"></select></label>
     <label>Matérias <select id="f-grupo"></select></label>
     <button class="botao tema" id="tema" type="button" aria-label="Alternar tema"></button>
@@ -32,6 +37,7 @@
   <main id="conteudo" aria-live="polite">
     <section class="kpis" id="kpis" aria-label="Números do último dia"></section>
 
+    <div id="painel-evolucao" role="tabpanel" aria-labelledby="aba-evolucao">
     <figure class="cartao" id="c-acervo">
       <div class="cartao-topo">
         <div>
@@ -88,7 +94,79 @@
       <ul class="legenda"></ul>
       <div class="grafico" tabindex="0"></div>
     </figure>
+    </div>
+
+    <div id="painel-retrato" role="tabpanel" aria-labelledby="aba-retrato" hidden>
+      <p class="nota-retrato" id="nota-retrato"></p>
+
+      <figure class="cartao barras-cartao" id="r-relator">
+        <div class="cartao-topo">
+          <div>
+            <h2>Por relator</h2>
+            <p class="sub">Matérias com cada relator designado. Clique numa barra, ou num trecho dela, para listar as matérias.</p>
+          </div>
+          <div class="alternador" role="group" aria-label="Mostrar">
+            <button type="button" data-modo="total">Total</button><button type="button" data-modo="idade">Por idade</button>
+          </div>
+        </div>
+        <ul class="legenda"></ul>
+        <ol class="barras"></ol>
+        <button class="botao mais" type="button"></button>
+      </figure>
+
+      <figure class="cartao barras-cartao" id="r-passo">
+        <div class="cartao-topo">
+          <div>
+            <h2>Por passo da tramitação interna</h2>
+            <p class="sub">O passo interno em que cada matéria está na comissão, como "Estudo para manifestação do relator".</p>
+          </div>
+          <div class="alternador" role="group" aria-label="Mostrar">
+            <button type="button" data-modo="total">Total</button><button type="button" data-modo="idade">Por tempo no passo</button>
+          </div>
+        </div>
+        <ul class="legenda"></ul>
+        <ol class="barras"></ol>
+        <button class="botao mais" type="button"></button>
+      </figure>
+
+      <figure class="cartao barras-cartao" id="r-autoria">
+        <div class="cartao-topo">
+          <div>
+            <h2>Por autoria</h2>
+            <p class="sub">Matérias de cada autor ou partido. Uma matéria com vários autores conta para cada um deles. O Executivo reúne os prefeitos, e a Mesa Diretora, as várias composições.</p>
+          </div>
+          <div class="controles">
+            <div class="alternador" role="group" aria-label="Agrupar por" data-grupo="agrupar">
+              <button type="button" data-modo="autor">Autor</button><button type="button" data-modo="partido">Partido</button>
+            </div>
+            <div class="alternador" role="group" aria-label="Mostrar">
+              <button type="button" data-modo="total">Total</button><button type="button" data-modo="idade">Por idade</button>
+            </div>
+          </div>
+        </div>
+        <label class="busca">Filtrar <input type="search" id="busca-autoria" placeholder="nome ou partido" autocomplete="off"></label>
+        <ul class="legenda"></ul>
+        <ol class="barras"></ol>
+        <button class="botao mais" type="button"></button>
+      </figure>
+
+      <section class="cartao" id="r-lista" aria-labelledby="lista-titulo">
+        <div class="cartao-topo">
+          <div>
+            <h2 id="lista-titulo">Matérias</h2>
+            <p class="sub" id="lista-sub"></p>
+          </div>
+          <div class="acoes">
+            <button class="botao" type="button" id="lista-limpar">Limpar seleção</button>
+            <button class="botao" type="button" id="lista-csv">Baixar CSV</button>
+          </div>
+        </div>
+        <div class="tabela lista"></div>
+        <button class="botao mais" type="button" id="lista-mais"></button>
+      </section>
+    </div>
   </main>
+  <div class="dica dica-barras" id="dica-barras" hidden></div>
 
   <div class="sobre">
     <section>

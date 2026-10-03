@@ -7,7 +7,8 @@ Gera os dados do painel em site/dados/ a partir de dados/:
   mesma agregação da reconstrução e mais a contagem de matérias sem relator.
 
 Grava um arquivo por grupo (serie-projetos.json e serie-todas.json), em colunas:
-uma lista de datas e, para cada comissão (e TODAS), uma lista por métrica.
+uma lista de datas e, para cada comissão (e TODAS), uma lista por métrica. Grava também
+o retrato do dia (retrato.json), matéria a matéria, para as visões do retrato atual.
 
 Uso (da raiz do repositório):  python -m painel
 """
@@ -19,6 +20,7 @@ from datetime import datetime
 
 from coletor import config as C
 from coletor.util import ler_csv, log
+from painel import retrato
 from reconstrucao import serie as S
 
 SAIDA = C.RAIZ / "site" / "dados"
@@ -80,6 +82,12 @@ def main() -> int:
         arquivo.write_text(json.dumps(conteudo, ensure_ascii=False, separators=(",", ":")),
                            encoding="utf-8")
         log(f"{arquivo.name}: {len(datas)} dias, {arquivo.stat().st_size / 1e6:.1f} MB")
+
+    conteudo = retrato.montar(ler_csv(C.ARQ_ACERVO), ler_csv(C.ARQ_MATERIAS),
+                              ler_csv(C.ARQ_AUTORIAS), ultima)
+    arquivo = SAIDA / "retrato.json"
+    arquivo.write_text(json.dumps(conteudo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    log(f"{arquivo.name}: {len(conteudo['materias'])} matérias, {arquivo.stat().st_size / 1e6:.1f} MB")
     return 0
 
 

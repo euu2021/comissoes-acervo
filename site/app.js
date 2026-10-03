@@ -52,7 +52,7 @@ const dataBR = (d) => `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.get
 const dataISO = (d) => d.toISOString().slice(0, 10);
 const utc = (iso) => new Date(`${iso}T00:00:00Z`);
 
-const estado = { periodo: "tudo", comissao: "TODAS", grupo: "projetos" };
+const estado = { aba: "evolucao", periodo: "tudo", comissao: "TODAS", grupo: "projetos" };
 const cache = {};
 let ultimaLargura = 0;
 
@@ -420,33 +420,13 @@ function renderMultiplos(j, i0, i1) {
   }
 }
 
-async function render() {
-  const conteudo = document.getElementById("conteudo");
-  conteudo.classList.add("carregando");
-  let j;
-  try {
-    j = await carregar(estado.grupo);
-  } catch (e) {
-    conteudo.classList.remove("carregando");
-    conteudo.replaceChildren(el("p", "erro", `Erro ao carregar os dados: ${e.message}`));
-    return;
-  }
-  conteudo.classList.remove("carregando");
-  ultimaLargura = conteudo.clientWidth;
-  const serie = j.comissoes[estado.comissao];
+function renderEvolucao(j, serie) {
   const [i0, i1] = intervalo(j.datasObj);
   const datas = j.datasObj.slice(i0, i1);
   const fatia = (campo) => serie[campo].slice(i0, i1);
   const nomeComissao = estado.comissao === "TODAS" ? "das 7 comissões" : `da ${estado.comissao}`;
   const nomeGrupo = estado.grupo === "projetos" ? "Projetos" : "Matérias";
   const arquivo = (tema) => `acervo-${tema}-${estado.comissao.toLowerCase()}-${estado.grupo}.csv`;
-
-  const coletado = new Date(j.atualizado_em);
-  document.getElementById("atualizacao").textContent =
-    `Última coleta em ${coletado.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })} às ` +
-    `${coletado.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}`;
-
-  renderKpis(j, serie);
 
   // Tamanho do acervo
   const cAcervo = document.getElementById("c-acervo");
@@ -496,6 +476,441 @@ async function render() {
   }
 }
 
+function mostrarErro(texto) {
+  let caixa = document.getElementById("erro");
+  if (!caixa) {
+    caixa = el("p", "erro");
+    caixa.id = "erro";
+    document.getElementById("conteudo").prepend(caixa);
+  }
+  caixa.textContent = texto;
+  caixa.hidden = !texto;
+}
+
+function mostrarAba() {
+  const retrato = estado.aba === "retrato";
+  document.getElementById("aba-evolucao").setAttribute("aria-selected", String(!retrato));
+  document.getElementById("aba-retrato").setAttribute("aria-selected", String(retrato));
+  document.getElementById("painel-evolucao").hidden = retrato;
+  document.getElementById("painel-retrato").hidden = !retrato;
+  document.getElementById("filtro-periodo").hidden = retrato;  // o retrato é sempre do último dia
+}
+
+async function render() {
+  const conteudo = document.getElementById("conteudo");
+  conteudo.classList.add("carregando");
+  let j;
+  try {
+    j = await carregar(estado.grupo);
+    if (estado.aba === "retrato") await carregarRetrato();
+  } catch (e) {
+    conteudo.classList.remove("carregando");
+    mostrarErro(`Erro ao carregar os dados: ${e.message}`);
+    return;
+  }
+  mostrarErro("");
+  conteudo.classList.remove("carregando");
+  ultimaLargura = conteudo.clientWidth;
+  const serie = j.comissoes[estado.comissao];
+
+  const coletado = new Date(j.atualizado_em);
+  document.getElementById("atualizacao").textContent =
+    `Última coleta em ${coletado.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })} às ` +
+    `${coletado.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}`;
+
+  renderKpis(j, serie);
+  mostrarAba();
+  if (estado.aba === "retrato") renderRetrato();
+  else renderEvolucao(j, serie);
+}
+
+// ----------------------------------------------------------------------------- retrato do dia
+const SPLEGIS = "https://splegisconsulta.saopaulo.sp.leg.br/Pesquisa/DetailsMateriaTramitacaoLegislativa/";
+// Faixas de tempo, da base da barra para a ponta (as mesmas da evolução).
+const FAIXAS_TEMPO = [
+  { chave: "mais365", nome: "Mais de 1 ano", cor: "--idade-5", min: 366 },
+  { chave: "181a365", nome: "181 a 365 dias", cor: "--idade-4", min: 181 },
+  { chave: "91a180", nome: "91 a 180 dias", cor: "--idade-3", min: 91 },
+  { chave: "31a90", nome: "31 a 90 dias", cor: "--idade-2", min: 31 },
+  { chave: "ate30", nome: "Até 30 dias", cor: "--idade-1", min: 0 },
+];
+const AGUARDANDO = { chave: "aguardando", nome: "Aguardando recebimento", cor: "--cinza-1" };
+const SEM_PASSO = { chave: "sempasso", nome: "Sem passo interno", cor: "--cinza-2" };
+const PRIMEIRAS = 15;  // linhas visíveis antes de "Mostrar todos"
+
+const retrato = {
+  dados: null,
+  recorte: null,  // { dim, chave, nome, faixa, nomeFaixa }
+  modos: { "r-relator": "total", "r-passo": "total", "r-autoria": "total" },
+  agrupar: "autor",
+  busca: "",
+  todos: new Set(),
+  ordem: { campo: "dc", desc: true },
+  limite: 50,
+};
+
+// Como cada visão agrupa as matérias e qual tempo usa nas faixas.
+const DIMENSOES = {
+  relator: {
+    chaves: (m) => [m.rel ?? -1],
+    nome: (k, d) => (k === -1 ? ["Sem relator", "", true] : [d.pessoas[k][0], d.pessoas[k][1], false]),
+    dias: (m) => m.dc, semDado: AGUARDANDO, fixar: -1,
+  },
+  passo: {
+    chaves: (m) => [m.pt || ""],
+    nome: (k) => (k === "" ? ["Sem passo interno", "", true] : [k, "", false]),
+    dias: (m) => m.dp, semDado: SEM_PASSO,
+  },
+  autor: {
+    chaves: (m) => (m.a.length ? m.a : [-1]),
+    nome: (k, d) => {
+      if (k === -1) return ["Sem autoria informada", "", true];
+      const [nome, grupo] = d.pessoas[k];
+      return [nome, grupo === nome || grupo === "Outros" ? "" : grupo, false];
+    },
+    dias: (m) => m.dc, semDado: AGUARDANDO,
+  },
+  partido: {
+    chaves: (m) => (m.a.length ? [...new Set(m.a.map((a) => retrato.dados.pessoas[a][1]))] : ["—"]),
+    nome: (k) => [k, "", k === "Outros" || k === "—"],
+    dias: (m) => m.dc, semDado: AGUARDANDO,
+  },
+};
+
+async function carregarRetrato() {
+  if (!retrato.dados) {
+    const r = await fetch("dados/retrato.json");
+    if (!r.ok) throw new Error(`não foi possível carregar dados/retrato.json (${r.status})`);
+    retrato.dados = await r.json();
+  }
+  return retrato.dados;
+}
+
+const semAcento = (t) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+function faixaDe(dias, semDado) {
+  return dias == null ? semDado.chave : FAIXAS_TEMPO.find((f) => dias >= f.min).chave;
+}
+
+function materiasDoFiltro() {
+  return retrato.dados.materias.filter((m) => (estado.comissao === "TODAS" || m.c === estado.comissao)
+                                               && (estado.grupo === "todas" || m.p));
+}
+
+function noRecorte(m, sel) {
+  const dim = DIMENSOES[sel.dim];
+  if (!dim.chaves(m).includes(sel.chave)) return false;
+  return !sel.faixa || faixaDe(dim.dias(m), dim.semDado) === sel.faixa;
+}
+
+function agrupar(mats, dimensao) {
+  const dim = DIMENSOES[dimensao];
+  const linhas = new Map();
+  for (const m of mats) {
+    const faixa = faixaDe(dim.dias(m), dim.semDado);
+    for (const k of dim.chaves(m)) {
+      let l = linhas.get(k);
+      if (!l) {
+        const [nome, grupo, especial] = dim.nome(k, retrato.dados);
+        l = { chave: k, nome, grupo, especial, total: 0, faixas: {}, areas: new Map() };
+        linhas.set(k, l);
+      }
+      l.total += 1;
+      l.faixas[faixa] = (l.faixas[faixa] || 0) + 1;
+      if (dimensao === "passo" && m.pa) l.areas.set(m.pa, (l.areas.get(m.pa) || 0) + 1);
+    }
+  }
+  const lista = [...linhas.values()];
+  if (dimensao === "passo") {  // o mesmo passo aparece em áreas diferentes; mostra a mais comum
+    for (const l of lista) l.grupo = [...l.areas].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+  }
+  lista.sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome, "pt-BR"));
+  const i = lista.findIndex((l) => l.chave === dim.fixar);
+  if (i > 0) lista.unshift(...lista.splice(i, 1));
+  return lista;
+}
+
+function renderBarras(id, dimensao, linhas, porTempo) {
+  const cartao = document.getElementById(id);
+  const c = cores();
+  const faixas = [...FAIXAS_TEMPO, DIMENSOES[dimensao].semDado];
+  const presentes = faixas.filter((f) => linhas.some((l) => l.faixas[f.chave]));
+  const ul = cartao.querySelector(".legenda");
+  ul.hidden = !porTempo;
+  if (porTempo) legenda(cartao, presentes);
+  const max = d3.max(linhas, (l) => l.total) || 1;
+  const todos = retrato.todos.has(id);
+  const ol = cartao.querySelector(".barras");
+  ol.replaceChildren(...linhas.slice(0, todos ? Infinity : PRIMEIRAS)
+    .map((l) => linhaBarra(l, dimensao, presentes, max, porTempo, c)));
+  if (!linhas.length) ol.replaceChildren(el("li", "vazio", "Nenhuma matéria neste recorte."));
+  const mais = cartao.querySelector(".mais");
+  mais.hidden = linhas.length <= PRIMEIRAS;
+  mais.textContent = todos ? `Mostrar só os ${PRIMEIRAS} primeiros` : `Mostrar todos (${linhas.length})`;
+}
+
+function linhaBarra(l, dimensao, faixas, max, porTempo, c) {
+  const sel = retrato.recorte;
+  const ativo = !!sel && sel.dim === dimensao && sel.chave === l.chave;
+  const botao = el("button", "barra-linha");
+  botao.type = "button";
+  botao.setAttribute("aria-pressed", String(ativo));
+  const completo = l.grupo ? `${l.nome} (${l.grupo})` : l.nome;
+  const nome = el("span", l.especial ? "barra-nome especial" : "barra-nome", l.nome);
+  if (l.grupo) nome.append(el("span", "grupo", l.grupo));
+  nome.title = completo;
+  const trilho = el("span", "barra-trilho");
+  const partes = porTempo ? faixas.filter((f) => l.faixas[f.chave]).map((f) => ({ f, n: l.faixas[f.chave] }))
+                          : [{ f: null, n: l.total }];
+  for (const { f, n } of partes) {
+    const seg = el("span", "seg");
+    seg.style.width = `${(100 * n) / max}%`;
+    seg.style.background = f ? c.v(f.cor) : c.s1;
+    seg.dataset.n = fmt(n);
+    seg.dataset.rotulo = f ? f.nome : "matérias";
+    seg.dataset.cor = f ? f.cor : "--s1";
+    if (f) {
+      seg.dataset.faixa = f.chave;
+      if (ativo && sel.faixa === f.chave) seg.classList.add("escolhido");
+    }
+    trilho.append(seg);
+  }
+  botao.append(nome, trilho, el("span", "barra-valor", fmt(l.total)));
+  const detalhe = porTempo ? ` (${partes.map((p) => `${fmt(p.n)}: ${p.f.nome.toLowerCase()}`).join("; ")})` : "";
+  botao.setAttribute("aria-label", `${completo}: ${fmt(l.total)} matérias${detalhe}. Listar as matérias.`);
+  botao.addEventListener("click", (ev) => {
+    const faixa = ev.target.closest(".seg")?.dataset.faixa ?? null;
+    retrato.recorte = { dim: dimensao, chave: l.chave, nome: completo, faixa,
+                        nomeFaixa: faixa ? faixas.find((f) => f.chave === faixa).nome : null };
+    retrato.limite = 50;
+    renderRetrato();
+    document.getElementById("r-lista").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  const li = el("li");
+  li.append(botao);
+  return li;
+}
+
+// Lista de matérias
+const ORDENS = {
+  c: (m) => m.c,
+  r: (m) => {
+    const [tipo, resto] = m.r.split(" ");
+    const [numero, ano] = resto.split("/");
+    return `${ano}-${tipo}-${numero.padStart(6, "0")}`;
+  },
+  aut: (m) => (m.a.length ? semAcento(retrato.dados.pessoas[m.a[0]][0]) : "~"),
+  rel: (m) => (m.rel == null ? "~" : semAcento(retrato.dados.pessoas[m.rel][0])),
+  dc: (m) => m.dc ?? -1,
+  dp: (m) => m.dp ?? -1,
+};
+
+function autoria(m, todos = false) {
+  const nomes = m.a.map((a) => {
+    const [nome, grupo] = retrato.dados.pessoas[a];
+    return grupo && grupo !== nome && grupo !== "Outros" ? `${nome} (${grupo})` : nome;
+  });
+  if (todos || nomes.length <= 3) return nomes.join("; ");
+  return `${nomes.slice(0, 2).join("; ")} e mais ${nomes.length - 2}`;
+}
+
+function relator(m) {
+  if (m.rel == null) return "";
+  const [nome, grupo] = retrato.dados.pessoas[m.rel];
+  return `${nome} (${grupo})`;
+}
+
+function listaFiltrada(mats) {
+  const sel = retrato.recorte;
+  const lista = sel ? mats.filter((m) => noRecorte(m, sel)) : [...mats];
+  const { campo, desc } = retrato.ordem;
+  const chave = ORDENS[campo];
+  return lista.sort((a, b) => {
+    const [x, y] = [chave(a), chave(b)];
+    return (x < y ? -1 : x > y ? 1 : 0) * (desc ? -1 : 1) || ORDENS.r(b).localeCompare(ORDENS.r(a));
+  });
+}
+
+function renderLista(mats) {
+  const sel = retrato.recorte;
+  const lista = listaFiltrada(mats);
+  const onde = estado.comissao === "TODAS" ? "nas 7 comissões" : `na ${estado.comissao}`;
+  document.getElementById("lista-titulo").textContent = sel ? `Matérias · ${sel.nome}` : "Matérias";
+  document.getElementById("lista-sub").textContent = sel
+    ? `${fmt(lista.length)} ${lista.length === 1 ? "matéria" : "matérias"} ${onde}` +
+      `${sel.nomeFaixa ? `, faixa "${sel.nomeFaixa.toLowerCase()}"` : ""}.`
+    : `Todas as ${fmt(lista.length)} matérias em análise ${onde}. Clique numa barra acima para filtrar.`;
+  document.getElementById("lista-limpar").hidden = !sel;
+
+  const colunas = [
+    ...(estado.comissao === "TODAS" ? [["c", "Comissão"]] : []),
+    ["r", "Matéria"], [null, "Ementa"], ["aut", "Autoria"], ["rel", "Relator"],
+    ["dc", "Na comissão"], ["dp", "Passo atual"],
+  ];
+  const tabela = el("table");
+  const cab = el("tr");
+  for (const [campo, nome] of colunas) {
+    const th = el("th");
+    th.scope = "col";
+    if (campo) {
+      const b = el("button", null, nome);
+      b.type = "button";
+      b.dataset.campo = campo;
+      th.append(b);
+      if (retrato.ordem.campo === campo) th.setAttribute("aria-sort", retrato.ordem.desc ? "descending" : "ascending");
+    } else {
+      th.textContent = nome;
+    }
+    cab.append(th);
+  }
+  tabela.append(el("thead"), el("tbody"));
+  tabela.tHead.append(cab);
+  for (const m of lista.slice(0, retrato.limite)) {
+    const tr = el("tr");
+    if (estado.comissao === "TODAS") tr.append(el("td", null, m.c));
+    const tdMateria = el("td", "materia");
+    const link = el("a", null, m.r);
+    link.href = SPLEGIS + m.id;
+    link.target = "_blank";
+    link.rel = "noopener";
+    tdMateria.append(link);
+    const tdEmenta = el("td", "ementa");
+    const ementa = el("span", null, m.e);
+    ementa.title = m.e;
+    tdEmenta.append(ementa);
+    const tdRelator = el("td", null, relator(m) || "—");
+    if (m.rel == null) tdRelator.classList.add("muted");
+    const tdDias = el("td", "num", m.dc == null ? "aguardando recebimento" : `${fmt(m.dc)} dias`);
+    const tdPasso = el("td");
+    tdPasso.append(document.createTextNode(m.pt || "—"));
+    if (m.dp != null) tdPasso.append(el("span", "muted", ` · há ${fmt(m.dp)} dias`));
+    tr.append(tdMateria, tdEmenta, el("td", null, autoria(m)), tdRelator, tdDias, tdPasso);
+    tabela.tBodies[0].append(tr);
+  }
+  const caixa = document.querySelector("#r-lista .lista");
+  caixa.replaceChildren(lista.length ? tabela : el("p", "vazio", "Nenhuma matéria neste recorte."));
+  const mais = document.getElementById("lista-mais");
+  const restantes = lista.length - retrato.limite;
+  mais.hidden = restantes <= 0;
+  mais.textContent = `Mostrar mais ${fmt(Math.min(50, restantes))} (faltam ${fmt(restantes)})`;
+}
+
+function csvLista() {
+  const lista = listaFiltrada(materiasDoFiltro());
+  const aspas = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+  const cab = ["comissao", "materia", "link", "ementa", "autoria", "relator", "recebida_em",
+               "dias_na_comissao", "passo_interno", "area_do_passo", "dias_no_passo"];
+  const linhas = [cab.join(",")];
+  for (const m of lista) {
+    linhas.push([m.c, m.r, SPLEGIS + m.id, m.e, autoria(m, true), relator(m), m.rec, m.dc ?? "",
+                 m.pt, m.pa, m.dp ?? ""].map(aspas).join(","));
+  }
+  const sufixo = retrato.recorte
+    ? `-${semAcento(retrato.recorte.nome).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}` : "";
+  const blob = new Blob([linhas.join("\n") + "\n"], { type: "text/csv;charset=utf-8" });
+  const a = el("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `materias-${estado.comissao.toLowerCase()}-${estado.grupo}${sufixo}.csv`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function sincronizarAlternadores() {
+  for (const [id, modo] of Object.entries(retrato.modos)) {
+    for (const b of document.querySelectorAll(`#${id} .alternador:not([data-grupo]) button`)) {
+      b.setAttribute("aria-pressed", String(b.dataset.modo === modo));
+    }
+  }
+  for (const b of document.querySelectorAll('#r-autoria .alternador[data-grupo="agrupar"] button')) {
+    b.setAttribute("aria-pressed", String(b.dataset.modo === retrato.agrupar));
+  }
+}
+
+function renderRetrato() {
+  const d = retrato.dados;
+  const mats = materiasDoFiltro();
+  const onde = estado.comissao === "TODAS" ? "nas 7 comissões" : `na ${estado.comissao}`;
+  const quais = estado.grupo === "projetos" ? "projetos" : "matérias";
+  document.getElementById("nota-retrato").textContent =
+    `Retrato de ${dataBR(utc(d.data))}: ${fmt(mats.length)} ${quais} em análise ${onde}. ` +
+    "As idades contam dias completos até a coleta.";
+  sincronizarAlternadores();
+  renderBarras("r-relator", "relator", agrupar(mats, "relator"), retrato.modos["r-relator"] === "idade");
+  renderBarras("r-passo", "passo", agrupar(mats, "passo"), retrato.modos["r-passo"] === "idade");
+  let porAutoria = agrupar(mats, retrato.agrupar);
+  if (retrato.busca.trim()) {
+    const busca = semAcento(retrato.busca.trim());
+    porAutoria = porAutoria.filter((l) => semAcento(`${l.nome} ${l.grupo}`).includes(busca));
+  }
+  renderBarras("r-autoria", retrato.agrupar, porAutoria, retrato.modos["r-autoria"] === "idade");
+  renderLista(mats);
+}
+
+function iniciarRetrato() {
+  for (const id of Object.keys(retrato.modos)) {
+    const cartao = document.getElementById(id);
+    cartao.querySelector(".alternador:not([data-grupo])").addEventListener("click", (ev) => {
+      const b = ev.target.closest("button");
+      if (!b) return;
+      retrato.modos[id] = b.dataset.modo;
+      renderRetrato();
+    });
+    cartao.querySelector(".mais").addEventListener("click", () => {
+      if (retrato.todos.has(id)) retrato.todos.delete(id);
+      else retrato.todos.add(id);
+      renderRetrato();
+    });
+  }
+  document.querySelector('#r-autoria .alternador[data-grupo="agrupar"]').addEventListener("click", (ev) => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    retrato.agrupar = b.dataset.modo;
+    renderRetrato();
+  });
+  let espera;
+  document.getElementById("busca-autoria").addEventListener("input", (ev) => {
+    clearTimeout(espera);
+    espera = setTimeout(() => { retrato.busca = ev.target.value; renderRetrato(); }, 150);
+  });
+  document.getElementById("lista-limpar").addEventListener("click", () => {
+    retrato.recorte = null;
+    retrato.limite = 50;
+    renderRetrato();
+  });
+  document.getElementById("lista-csv").addEventListener("click", csvLista);
+  document.getElementById("lista-mais").addEventListener("click", () => {
+    retrato.limite += 50;
+    renderLista(materiasDoFiltro());
+  });
+  document.querySelector("#r-lista .lista").addEventListener("click", (ev) => {
+    const b = ev.target.closest("th button");
+    if (!b) return;
+    const campo = b.dataset.campo;
+    const textual = ["c", "r", "aut", "rel"].includes(campo);
+    retrato.ordem = { campo, desc: retrato.ordem.campo === campo ? !retrato.ordem.desc : !textual };
+    renderLista(materiasDoFiltro());
+  });
+
+  // Dica dos trechos das barras: valor primeiro, nome depois.
+  const dica = document.getElementById("dica-barras");
+  document.addEventListener("pointermove", (ev) => {
+    const seg = ev.target.closest?.(".barras .seg");
+    if (!seg) { dica.hidden = true; return; }
+    const linha = el("div", "linha");
+    const chave = el("span", "chave");
+    chave.style.background = cores().v(seg.dataset.cor);
+    linha.append(chave, el("strong", null, seg.dataset.n), el("span", "nome", seg.dataset.rotulo));
+    dica.replaceChildren(el("p", "data", seg.closest(".barra-linha").querySelector(".barra-nome").title), linha);
+    dica.hidden = false;
+    const w = dica.offsetWidth;
+    const h = dica.offsetHeight;
+    dica.style.left = `${Math.min(ev.clientX + 14, window.innerWidth - w - 8)}px`;
+    dica.style.top = `${ev.clientY + 18 + h > window.innerHeight ? ev.clientY - h - 12 : ev.clientY + 18}px`;
+  });
+}
+
 // ----------------------------------------------------------------------------- filtros, tema e endereço
 function preencher(select, opcoes, valor) {
   select.replaceChildren(...opcoes.map(([v, t]) => {
@@ -512,6 +927,7 @@ function lerEndereco() {
   if (valido(COMISSOES, p.get("comissao"))) estado.comissao = p.get("comissao");
   if (valido(GRUPOS, p.get("grupo"))) estado.grupo = p.get("grupo");
   if (valido(PERIODOS, p.get("periodo"))) estado.periodo = p.get("periodo");
+  if (["evolucao", "retrato"].includes(p.get("aba"))) estado.aba = p.get("aba");
 }
 
 function sincronizar() {
@@ -539,10 +955,26 @@ function iniciar() {
   for (const [id, chave] of [["f-periodo", "periodo"], ["f-comissao", "comissao"], ["f-grupo", "grupo"]]) {
     document.getElementById(id).addEventListener("change", (ev) => {
       estado[chave] = ev.target.value;
+      retrato.recorte = null;  // a seleção da lista vale para a comissão e o grupo em que foi feita
       sincronizar();
       render();
     });
   }
+  for (const aba of ["evolucao", "retrato"]) {
+    document.getElementById(`aba-${aba}`).addEventListener("click", () => {
+      estado.aba = aba;
+      sincronizar();
+      render();
+    });
+  }
+  document.querySelector(".abas").addEventListener("keydown", (ev) => {
+    if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+    estado.aba = estado.aba === "evolucao" ? "retrato" : "evolucao";
+    sincronizar();
+    render();
+    document.getElementById(`aba-${estado.aba}`).focus();
+  });
+  iniciarRetrato();
   aplicarTema(document.documentElement.dataset.theme || "");
   document.getElementById("tema").addEventListener("click", () => {
     const atual = document.documentElement.dataset.theme || "";
