@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections import defaultdict
 from datetime import datetime
 
 from coletor import config as C
@@ -24,7 +25,7 @@ from painel import retrato
 from reconstrucao import serie as S
 
 SAIDA = C.RAIZ / "site" / "dados"
-METRICAS = [*S.CAMPOS[3:], "sem_relator"]
+METRICAS = [*S.CAMPOS[3:], "sem_relator", "relatores"]
 
 
 def serie_real(coletas: list[dict], historico: list[dict]) -> list[dict]:
@@ -41,12 +42,20 @@ def serie_real(coletas: list[dict], historico: list[dict]) -> list[dict]:
             proxima += 1
         ativas = [h for h in ativas if not h["ate"] or dia <= h["ate"]]
         itens = []
+        relatores: dict[tuple, set] = defaultdict(set)  # relatores com matérias distribuídas
         for h in ativas:
             recebido = datetime.fromisoformat(h["recebido_em"]) if h["recebido_em"] else None
             faixa, dias = S.idade(recebido, instante)
-            itens.append((h["comissao"], h["rotulo"].split()[0] in S.PROJETOS, faixa, dias,
+            projeto = h["rotulo"].split()[0] in S.PROJETOS
+            itens.append((h["comissao"], projeto, faixa, dias,
                           S.categoria(h["interna_area"]), not h["relator_codigo"]))
-        linhas += S.agregar(dia, itens, comissoes, com_relator=True)
+            if h["relator_codigo"]:
+                for comissao in (h["comissao"], S.TODAS):
+                    for grupo in ("todas", "projetos") if projeto else ("todas",):
+                        relatores[(comissao, grupo)].add(h["relator_codigo"])
+        for linha in S.agregar(dia, itens, comissoes, com_relator=True):
+            linha["relatores"] = str(len(relatores[(linha["comissao"], linha["grupo"])]))
+            linhas.append(linha)
     return linhas
 
 

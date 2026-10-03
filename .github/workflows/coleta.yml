@@ -2,8 +2,10 @@ name: Coleta diária
 
 on:
   schedule:
-    - cron: "47 0 * * *"  # 21h47 em Brasília (UTC−3)
-    - cron: "47 2 * * *"  # 23h47: repescagem, só coleta se o dia ainda estiver sem coleta
+    - cron: "7 13 * * *"   # 10h07 em Brasília (UTC−3): atualiza o retrato do dia
+    - cron: "7 18 * * *"   # 15h07: idem
+    - cron: "47 0 * * *"   # 21h47: retrato do fim do dia
+    - cron: "47 2 * * *"   # 23h47: repescagem, só coleta se o dia ainda estiver sem coleta
   workflow_dispatch:
 
 permissions:

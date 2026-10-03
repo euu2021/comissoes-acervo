@@ -52,7 +52,7 @@ const dataBR = (d) => `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.get
 const dataISO = (d) => d.toISOString().slice(0, 10);
 const utc = (iso) => new Date(`${iso}T00:00:00Z`);
 
-const estado = { aba: "evolucao", periodo: "tudo", comissao: "TODAS", grupo: "projetos" };
+const estado = { aba: "retrato", periodo: "tudo", comissao: "TODAS", grupo: "projetos" };
 const cache = {};
 let ultimaLargura = 0;
 
@@ -359,18 +359,19 @@ function renderKpis(j, serie) {
   const total = serie.materias[u];
   const iAno = d3.bisectLeft(j.datasObj, new Date(hoje - 365 * DIA));
   const antes = iAno < u ? serie.materias[iAno] : null;
-  const recebidas = total - serie.pendentes[u] - (serie.idade_desconhecida[u] ?? 0);
-  const velhas = serie.idade_mais365[u];
-  const variacao = antes == null ? "" :
-    `${total - antes >= 0 ? "+" : "−"}${fmt(Math.abs(total - antes))} em 12 meses (eram ${fmt(antes)})`;
+  const mais180 = serie.idade_181a365[u] + serie.idade_mais365[u];
+  const mais365 = serie.idade_mais365[u];
+  const quais = estado.grupo === "projetos" ? "projetos em análise" : "matérias em análise";
+  const variacao = antes == null ? quais
+    : `${quais}; ${total - antes >= 0 ? "+" : "−"}${fmt(Math.abs(total - antes))} em 12 meses (eram ${fmt(antes)})`;
   const itens = [
-    { rotulo: `Matérias no acervo em ${dataBR(hoje)}`, valor: fmt(total), nota: variacao, heroi: true },
-    { rotulo: "Há mais de 1 ano na comissão", valor: fmt(velhas),
-      nota: recebidas ? `${Math.round((100 * velhas) / recebidas)}% das já recebidas` : "" },
-    { rotulo: "Idade mediana", valor: serie.mediana_dias[u] == null ? "—" : `${fmt(serie.mediana_dias[u])} dias`,
-      nota: "das matérias já recebidas" },
-    { rotulo: "Sem relator", valor: fmt(serie.sem_relator[u]), nota: "segundo o retrato do dia" },
-    { rotulo: "Aguardando recebimento", valor: fmt(serie.pendentes[u]), nota: "enviadas e ainda não recebidas" },
+    { rotulo: `Acervo ativo em ${dataBR(hoje)}`, valor: fmt(total), nota: variacao, heroi: true },
+    { rotulo: "Relatores", valor: fmt(serie.relatores[u]), nota: "com matérias distribuídas" },
+    { rotulo: "Sem relator", valor: fmt(serie.sem_relator[u]), nota: `${porcento(serie.sem_relator[u], total)} do acervo` },
+    { rotulo: "Mais de 180 dias", valor: fmt(mais180), nota: `${porcento(mais180, total)} do acervo` },
+    { rotulo: "Mais de 365 dias", valor: fmt(mais365), nota: `${porcento(mais365, total)} do acervo` },
+    { rotulo: "Mediana na comissão", valor: serie.mediana_dias[u] == null ? "—" : `${fmt(serie.mediana_dias[u])} dias`,
+      nota: "metade do acervo abaixo" },
   ];
   document.getElementById("kpis").replaceChildren(...itens.map((k) => {
     const div = el("div", k.heroi ? "kpi heroi" : "kpi");
@@ -526,6 +527,7 @@ async function render() {
 
 // ----------------------------------------------------------------------------- retrato do dia
 const SPLEGIS = "https://splegisconsulta.saopaulo.sp.leg.br/Pesquisa/DetailsMateriaTramitacaoLegislativa/";
+const RELATORIO = "https://splegisconsulta.saopaulo.sp.leg.br/Relatorio/IndexComissaoProjetoTramitacaoInterna";
 // Faixas de tempo, da base da barra para a ponta (as mesmas da evolução).
 const FAIXAS_TEMPO = [
   { chave: "mais365", nome: "Mais de 1 ano", cor: "--idade-5", min: 366 },
@@ -535,18 +537,25 @@ const FAIXAS_TEMPO = [
   { chave: "ate30", nome: "Até 30 dias", cor: "--idade-1", min: 0 },
 ];
 const AGUARDANDO = { chave: "aguardando", nome: "Aguardando recebimento", cor: "--cinza-1" };
-const SEM_PASSO = { chave: "sempasso", nome: "Sem passo interno", cor: "--cinza-2" };
+const SEM_PASSO = { chave: "sempasso", nome: "Sem estado interno", cor: "--cinza-2" };
 const PRIMEIRAS = 15;  // linhas visíveis antes de "Mostrar todos"
+const ORDEM_COMISSOES = ["CCJ", "FIN", "URB", "ADM", "ECON", "EDUC", "SAUDE"];
+// Grupos que não são partidos, com a descrição mostrada ao lado do nome.
+const GRUPOS_ESPECIAIS = {
+  Executivo: "prefeitos agregados",
+  "Mesa Diretora": "períodos e legislaturas agregados",
+  Institucional: "autoria institucional",
+  Remetentes: "remetente",
+  Outros: "",
+};
 
 const retrato = {
   dados: null,
-  recorte: null,  // { dim, chave, nome, faixa, nomeFaixa }
-  modos: { "r-relator": "total", "r-passo": "total", "r-autoria": "total" },
+  modos: { "r-relator": "total", "r-passo": "total", "r-autores": "idade", "s-relator": "total", "s-passo": "total" },
   agrupar: "autor",
-  busca: "",
   todos: new Set(),
-  ordem: { campo: "dc", desc: true },
-  limite: 50,
+  selecao: [],  // [{ tipo: "autor" | "partido", chave }]
+  janela: { titulo: "", sub: "", lista: [], limite: 100, ordem: { campo: "dc", desc: true } },
 };
 
 // Como cada visão agrupa as matérias e qual tempo usa nas faixas.
@@ -558,7 +567,7 @@ const DIMENSOES = {
   },
   passo: {
     chaves: (m) => [m.pt || ""],
-    nome: (k) => (k === "" ? ["Sem passo interno", "", true] : [k, "", false]),
+    nome: (k) => (k === "" ? ["Sem estado informado", "", true] : [k, "", false]),
     dias: (m) => m.dp, semDado: SEM_PASSO,
   },
   autor: {
@@ -566,13 +575,13 @@ const DIMENSOES = {
     nome: (k, d) => {
       if (k === -1) return ["Sem autoria informada", "", true];
       const [nome, grupo] = d.pessoas[k];
-      return [nome, grupo === nome || grupo === "Outros" ? "" : grupo, false];
+      return [nome, grupo in GRUPOS_ESPECIAIS ? GRUPOS_ESPECIAIS[grupo] : grupo, false];
     },
     dias: (m) => m.dc, semDado: AGUARDANDO,
   },
   partido: {
     chaves: (m) => (m.a.length ? [...new Set(m.a.map((a) => retrato.dados.pessoas[a][1]))] : ["—"]),
-    nome: (k) => [k, "", k === "Outros" || k === "—"],
+    nome: (k) => [k, GRUPOS_ESPECIAIS[k] ?? "", k in GRUPOS_ESPECIAIS || k === "—"],
     dias: (m) => m.dc, semDado: AGUARDANDO,
   },
 };
@@ -587,9 +596,15 @@ async function carregarRetrato() {
 }
 
 const semAcento = (t) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const pct = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const porcento = (parte, todo) => (todo ? `${pct.format((100 * parte) / todo)}%` : "—");
 
 function faixaDe(dias, semDado) {
   return dias == null ? semDado.chave : FAIXAS_TEMPO.find((f) => dias >= f.min).chave;
+}
+
+function nomeFaixa(chave) {
+  return [...FAIXAS_TEMPO, AGUARDANDO, SEM_PASSO].find((f) => f.chave === chave)?.nome ?? "";
 }
 
 function materiasDoFiltro() {
@@ -621,7 +636,7 @@ function agrupar(mats, dimensao) {
     }
   }
   const lista = [...linhas.values()];
-  if (dimensao === "passo") {  // o mesmo passo aparece em áreas diferentes; mostra a mais comum
+  if (dimensao === "passo") {  // o mesmo estado aparece em áreas diferentes; mostra a mais comum
     for (const l of lista) l.grupo = [...l.areas].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
   }
   lista.sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome, "pt-BR"));
@@ -630,31 +645,35 @@ function agrupar(mats, dimensao) {
   return lista;
 }
 
-function renderBarras(id, dimensao, linhas, porTempo) {
+// ----------------------------------------------------------------------------- barras
+// Cada cartão de barras (id) tem modo ("total" ou "idade"), legenda e "Mostrar todos".
+function renderBarras(id, dimensao, linhas, aoClicar, marcado) {
   const cartao = document.getElementById(id);
+  const porTempo = retrato.modos[id] === "idade";
   const c = cores();
   const faixas = [...FAIXAS_TEMPO, DIMENSOES[dimensao].semDado];
   const presentes = faixas.filter((f) => linhas.some((l) => l.faixas[f.chave]));
   const ul = cartao.querySelector(".legenda");
   ul.hidden = !porTempo;
   if (porTempo) legenda(cartao, presentes);
+  for (const b of cartao.querySelectorAll(".alternador:not([data-grupo]) button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.modo === retrato.modos[id]));
+  }
   const max = d3.max(linhas, (l) => l.total) || 1;
   const todos = retrato.todos.has(id);
   const ol = cartao.querySelector(".barras");
   ol.replaceChildren(...linhas.slice(0, todos ? Infinity : PRIMEIRAS)
-    .map((l) => linhaBarra(l, dimensao, presentes, max, porTempo, c)));
+    .map((l) => linhaBarra(l, presentes, max, porTempo, c, aoClicar, marcado?.(l))));
   if (!linhas.length) ol.replaceChildren(el("li", "vazio", "Nenhuma matéria neste recorte."));
   const mais = cartao.querySelector(".mais");
   mais.hidden = linhas.length <= PRIMEIRAS;
   mais.textContent = todos ? `Mostrar só os ${PRIMEIRAS} primeiros` : `Mostrar todos (${linhas.length})`;
 }
 
-function linhaBarra(l, dimensao, faixas, max, porTempo, c) {
-  const sel = retrato.recorte;
-  const ativo = !!sel && sel.dim === dimensao && sel.chave === l.chave;
+function linhaBarra(l, faixas, max, porTempo, c, aoClicar, marcado) {
   const botao = el("button", "barra-linha");
   botao.type = "button";
-  botao.setAttribute("aria-pressed", String(ativo));
+  if (marcado != null) botao.setAttribute("aria-pressed", String(marcado));
   const completo = l.grupo ? `${l.nome} (${l.grupo})` : l.nome;
   const nome = el("span", l.especial ? "barra-nome especial" : "barra-nome", l.nome);
   if (l.grupo) nome.append(el("span", "grupo", l.grupo));
@@ -669,38 +688,31 @@ function linhaBarra(l, dimensao, faixas, max, porTempo, c) {
     seg.dataset.n = fmt(n);
     seg.dataset.rotulo = f ? f.nome : "matérias";
     seg.dataset.cor = f ? f.cor : "--s1";
-    if (f) {
-      seg.dataset.faixa = f.chave;
-      if (ativo && sel.faixa === f.chave) seg.classList.add("escolhido");
-    }
+    if (f) seg.dataset.faixa = f.chave;
     trilho.append(seg);
   }
   botao.append(nome, trilho, el("span", "barra-valor", fmt(l.total)));
   const detalhe = porTempo ? ` (${partes.map((p) => `${fmt(p.n)}: ${p.f.nome.toLowerCase()}`).join("; ")})` : "";
-  botao.setAttribute("aria-label", `${completo}: ${fmt(l.total)} matérias${detalhe}. Listar as matérias.`);
-  botao.addEventListener("click", (ev) => {
-    const faixa = ev.target.closest(".seg")?.dataset.faixa ?? null;
-    retrato.recorte = { dim: dimensao, chave: l.chave, nome: completo, faixa,
-                        nomeFaixa: faixa ? faixas.find((f) => f.chave === faixa).nome : null };
-    retrato.limite = 50;
-    renderRetrato();
-    document.getElementById("r-lista").scrollIntoView({ behavior: "smooth", block: "start" });
-  });
+  botao.setAttribute("aria-label", `${completo}: ${fmt(l.total)} matérias${detalhe}.`);
+  botao.addEventListener("click", (ev) => aoClicar(l, ev.target.closest(".seg")?.dataset.faixa ?? null, completo));
   const li = el("li");
   li.append(botao);
   return li;
 }
 
-// Lista de matérias
+// ----------------------------------------------------------------------------- lista de matérias
 const ORDENS = {
-  c: (m) => m.c,
+  c: (m) => ORDEM_COMISSOES.indexOf(m.c),
   r: (m) => {
     const [tipo, resto] = m.r.split(" ");
     const [numero, ano] = resto.split("/");
-    return `${ano}-${tipo}-${numero.padStart(6, "0")}`;
+    return `${ano}-${numero.padStart(6, "0")}-${tipo}`;
   },
   aut: (m) => (m.a.length ? semAcento(retrato.dados.pessoas[m.a[0]][0]) : "~"),
+  e: (m) => semAcento(m.e),
   rel: (m) => (m.rel == null ? "~" : semAcento(retrato.dados.pessoas[m.rel][0])),
+  pa: (m) => semAcento(m.pa || "~"),
+  pt: (m) => semAcento(m.pt || "~"),
   dc: (m) => m.dc ?? -1,
   dp: (m) => m.dp ?? -1,
 };
@@ -708,7 +720,7 @@ const ORDENS = {
 function autoria(m, todos = false) {
   const nomes = m.a.map((a) => {
     const [nome, grupo] = retrato.dados.pessoas[a];
-    return grupo && grupo !== nome && grupo !== "Outros" ? `${nome} (${grupo})` : nome;
+    return grupo in GRUPOS_ESPECIAIS ? nome : `${nome} (${grupo})`;
   });
   if (todos || nomes.length <= 3) return nomes.join("; ");
   return `${nomes.slice(0, 2).join("; ")} e mais ${nomes.length - 2}`;
@@ -720,56 +732,61 @@ function relator(m) {
   return `${nome} (${grupo})`;
 }
 
-function listaFiltrada(mats) {
-  const sel = retrato.recorte;
-  const lista = sel ? mats.filter((m) => noRecorte(m, sel)) : [...mats];
-  const { campo, desc } = retrato.ordem;
+function ordenar(lista, { campo, desc }) {
   const chave = ORDENS[campo];
-  return lista.sort((a, b) => {
+  return [...lista].sort((a, b) => {
     const [x, y] = [chave(a), chave(b)];
     return (x < y ? -1 : x > y ? 1 : 0) * (desc ? -1 : 1) || ORDENS.r(b).localeCompare(ORDENS.r(a));
   });
 }
 
-function renderLista(mats) {
-  const sel = retrato.recorte;
-  const lista = listaFiltrada(mats);
-  const onde = estado.comissao === "TODAS" ? "nas 7 comissões" : `na ${estado.comissao}`;
-  document.getElementById("lista-titulo").textContent = sel ? `Matérias · ${sel.nome}` : "Matérias";
-  document.getElementById("lista-sub").textContent = sel
-    ? `${fmt(lista.length)} ${lista.length === 1 ? "matéria" : "matérias"} ${onde}` +
-      `${sel.nomeFaixa ? `, faixa "${sel.nomeFaixa.toLowerCase()}"` : ""}.`
-    : `Todas as ${fmt(lista.length)} matérias em análise ${onde}. Clique numa barra acima para filtrar.`;
-  document.getElementById("lista-limpar").hidden = !sel;
+function nomeComissaoAtual() {
+  return estado.comissao === "TODAS" ? "Todas as comissões"
+    : `${estado.comissao} — ${COMISSOES.find(([s]) => s === estado.comissao)[1]}`;
+}
 
-  const colunas = [
-    ...(estado.comissao === "TODAS" ? [["c", "Comissão"]] : []),
-    ["r", "Matéria"], [null, "Ementa"], ["aut", "Autoria"], ["rel", "Relator"],
-    ["dc", "Na comissão"], ["dp", "Passo atual"],
-  ];
+function abrirLista(titulo, materias) {
+  const j = retrato.janela;
+  j.titulo = titulo;
+  j.lista = materias;
+  j.limite = 100;
+  const quais = estado.grupo === "projetos" ? "projeto(s)" : "matéria(s)";
+  j.sub = `${nomeComissaoAtual()} · ${fmt(materias.length)} ${quais} no recorte · Clique nos títulos das colunas para ordenar.`;
+  renderJanela();
+  const dialogo = document.getElementById("janela-lista");
+  if (!dialogo.open) dialogo.showModal();
+}
+
+const COLUNAS_JANELA = [
+  ["c", "Comissão"], ["r", "Matéria"], ["aut", "Autor(es)"], ["e", "Ementa"], ["rel", "Relator"],
+  ["pa", "Local atual"], ["pt", "Estado atual"], ["dc", "Dias na comissão"], ["dp", "Dias no estado"],
+];
+
+function renderJanela() {
+  const j = retrato.janela;
+  document.getElementById("janela-titulo").textContent = j.titulo;
+  document.getElementById("janela-sub").textContent = j.sub;
+  const lista = ordenar(j.lista, j.ordem);
+  const colunas = COLUNAS_JANELA.filter(([c]) => c !== "c" || estado.comissao === "TODAS");
   const tabela = el("table");
   const cab = el("tr");
   for (const [campo, nome] of colunas) {
     const th = el("th");
     th.scope = "col";
-    if (campo) {
-      const b = el("button", null, nome);
-      b.type = "button";
-      b.dataset.campo = campo;
-      th.append(b);
-      if (retrato.ordem.campo === campo) th.setAttribute("aria-sort", retrato.ordem.desc ? "descending" : "ascending");
-    } else {
-      th.textContent = nome;
-    }
+    const b = el("button", null, nome);
+    b.type = "button";
+    b.dataset.campo = campo;
+    th.append(b);
+    if (j.ordem.campo === campo) th.setAttribute("aria-sort", j.ordem.desc ? "descending" : "ascending");
     cab.append(th);
   }
   tabela.append(el("thead"), el("tbody"));
   tabela.tHead.append(cab);
-  for (const m of lista.slice(0, retrato.limite)) {
+  for (const m of lista.slice(0, j.limite)) {
     const tr = el("tr");
     if (estado.comissao === "TODAS") tr.append(el("td", null, m.c));
     const tdMateria = el("td", "materia");
-    const link = el("a", null, m.r);
+    const link = el("a", null, `${m.r} ↗`);
     link.href = SPLEGIS + m.id;
     link.target = "_blank";
     link.rel = "noopener";
@@ -778,74 +795,316 @@ function renderLista(mats) {
     const ementa = el("span", null, m.e);
     ementa.title = m.e;
     tdEmenta.append(ementa);
-    const tdRelator = el("td", null, relator(m) || "—");
+    const tdRelator = el("td", null, relator(m) || "Sem relator");
     if (m.rel == null) tdRelator.classList.add("muted");
-    const tdDias = el("td", "num", m.dc == null ? "aguardando recebimento" : `${fmt(m.dc)} dias`);
-    const tdPasso = el("td");
-    tdPasso.append(document.createTextNode(m.pt || "—"));
-    if (m.dp != null) tdPasso.append(el("span", "muted", ` · há ${fmt(m.dp)} dias`));
-    tr.append(tdMateria, tdEmenta, el("td", null, autoria(m)), tdRelator, tdDias, tdPasso);
+    tr.append(tdMateria, el("td", "autores", autoria(m)), tdEmenta, tdRelator, el("td", null, m.pa || "—"),
+              el("td", null, m.pt || "—"),
+              el("td", "num", m.dc == null ? "aguardando" : fmt(m.dc)), el("td", "num", fmt(m.dp)));
     tabela.tBodies[0].append(tr);
   }
-  const caixa = document.querySelector("#r-lista .lista");
+  const caixa = document.getElementById("janela-tabela");
   caixa.replaceChildren(lista.length ? tabela : el("p", "vazio", "Nenhuma matéria neste recorte."));
-  const mais = document.getElementById("lista-mais");
-  const restantes = lista.length - retrato.limite;
+  const mais = document.getElementById("janela-mais");
+  const restantes = lista.length - j.limite;
   mais.hidden = restantes <= 0;
-  mais.textContent = `Mostrar mais ${fmt(Math.min(50, restantes))} (faltam ${fmt(restantes)})`;
+  mais.textContent = `Mostrar mais ${fmt(Math.min(100, restantes))} (faltam ${fmt(restantes)})`;
 }
 
-function csvLista() {
-  const lista = listaFiltrada(materiasDoFiltro());
-  const aspas = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
-  const cab = ["comissao", "materia", "link", "ementa", "autoria", "relator", "recebida_em",
-               "dias_na_comissao", "passo_interno", "area_do_passo", "dias_no_passo"];
-  const linhas = [cab.join(",")];
-  for (const m of lista) {
-    linhas.push([m.c, m.r, SPLEGIS + m.id, m.e, autoria(m, true), relator(m), m.rec, m.dc ?? "",
-                 m.pt, m.pa, m.dp ?? ""].map(aspas).join(","));
-  }
-  const sufixo = retrato.recorte
-    ? `-${semAcento(retrato.recorte.nome).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}` : "";
-  const blob = new Blob([linhas.join("\n") + "\n"], { type: "text/csv;charset=utf-8" });
+// ----------------------------------------------------------------------------- exportações
+const COLUNAS_EXPORTACAO = [
+  { nome: "Processo", largura: 15 }, { nome: "Tipo", largura: 8 }, { nome: "Número", largura: 9 },
+  { nome: "Ano", largura: 8 }, { nome: "Comissão", largura: 10 }, { nome: "Ementa", largura: 60 },
+  { nome: "Autor", largura: 30 }, { nome: "Relator", largura: 30 }, { nome: "Data da tramitação", largura: 20 },
+  { nome: "Local da tramitação", largura: 18 }, { nome: "Motivo da tramitação", largura: 28 },
+  { nome: "Data da tramitação interna", largura: 22 }, { nome: "Local da tramitação interna", largura: 26 },
+  { nome: "Estado atual", largura: 36 }, { nome: "Dias na comissão", largura: 10 },
+  { nome: "Faixa — dias na comissão", largura: 22 }, { nome: "Dias no estado atual", largura: 10 },
+  { nome: "Faixa — dias no estado atual", largura: 24 }, { nome: "Relatório detalhado", largura: 16 },
+];
+
+const dataHora = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)} ${iso.slice(11, 19)}`.trim() : "");
+
+function linhaExportacao(m, xlsx) {
+  const [tipo, resto] = m.r.split(" ");
+  const [numero, ano] = resto.split("/");
+  const recebida = !!m.rec;
+  return [
+    m.r, tipo, Number(numero), Number(ano), m.c, m.e, autoria(m, true), relator(m) || "Sem relator",
+    dataHora(recebida ? m.rec : m.envd), m.c,
+    m.env ? `${recebida ? "Recebido de" : "Pendente recebimento de"} ${m.env}` : "",
+    dataHora(m.pd), m.pa, m.pt || "Sem estado informado",
+    m.dc ?? "", nomeFaixa(faixaDe(m.dc, AGUARDANDO)), m.dp ?? "", nomeFaixa(faixaDe(m.dp, SEM_PASSO)),
+    xlsx ? { link: SPLEGIS + m.id, texto: "Abrir no SPLEGIS" } : SPLEGIS + m.id,
+  ];
+}
+
+function baixar(blob, arquivo) {
   const a = el("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `materias-${estado.comissao.toLowerCase()}-${estado.grupo}${sufixo}.csv`;
+  a.download = arquivo;
   document.body.append(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-function sincronizarAlternadores() {
-  for (const [id, modo] of Object.entries(retrato.modos)) {
-    for (const b of document.querySelectorAll(`#${id} .alternador:not([data-grupo]) button`)) {
-      b.setAttribute("aria-pressed", String(b.dataset.modo === modo));
-    }
-  }
-  for (const b of document.querySelectorAll('#r-autoria .alternador[data-grupo="agrupar"] button')) {
-    b.setAttribute("aria-pressed", String(b.dataset.modo === retrato.agrupar));
+function nomeArquivo(base, extensao) {
+  const coleta = retrato.dados.coletado_em.slice(0, 16).replace("T", "_").replace(":", "");
+  const limpo = semAcento(base).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+  return `acervo-comissoes-cmsp_${coleta}_${limpo}.${extensao}`;
+}
+
+async function exportar(formato, titulo, materias) {
+  const lista = ordenar(materias, retrato.janela.ordem);
+  if (formato === "csv") {
+    const aspas = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+    const linhas = [COLUNAS_EXPORTACAO.map((c) => aspas(c.nome)).join(",")];
+    for (const m of lista) linhas.push(linhaExportacao(m, false).map(aspas).join(","));
+    // BOM para o Excel reconhecer o UTF-8 e os acentos
+    baixar(new Blob(["﻿" + linhas.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" }),
+           nomeArquivo(titulo, "csv"));
+  } else if (formato === "xlsx") {
+    const blob = await PlanilhaXlsx.gerar([{
+      nome: "Matérias", titulo: `${titulo} · ${nomeComissaoAtual()}`,
+      informacoes: [["Última atualização", dataHora(retrato.dados.coletado_em)], ["Fonte", RELATORIO],
+                    ["Matérias", lista.length]],
+      colunas: COLUNAS_EXPORTACAO, linhas: lista.map((m) => linhaExportacao(m, true)),
+    }]);
+    baixar(blob, nomeArquivo(titulo, "xlsx"));
+  } else {
+    imprimir(titulo, lista);
   }
 }
 
+function imprimir(titulo, lista) {
+  const caixa = document.getElementById("impressao");
+  const tabela = el("table");
+  const cab = el("tr");
+  for (const nome of ["Matéria", "Autor(es)", "Ementa", "Relator", "Estado atual", "Dias na comissão"]) {
+    cab.append(el("th", null, nome));
+  }
+  tabela.append(el("thead"), el("tbody"));
+  tabela.tHead.append(cab);
+  for (const m of lista) {
+    const tr = el("tr");
+    tr.append(el("td", null, `${estado.comissao === "TODAS" ? `${m.c} · ` : ""}${m.r}`), el("td", null, autoria(m, true)),
+              el("td", null, m.e), el("td", null, relator(m) || "Sem relator"), el("td", null, m.pt || "—"),
+              el("td", null, m.dc == null ? "aguardando" : fmt(m.dc)));
+    tabela.tBodies[0].append(tr);
+  }
+  caixa.replaceChildren(el("h1", null, titulo),
+                        el("p", null, `${nomeComissaoAtual()} · ${fmt(lista.length)} matéria(s) · ` +
+                                      `retrato de ${dataHora(retrato.dados.coletado_em)} · fonte: SPLEGIS`),
+                        tabela);
+  document.body.classList.add("imprimindo");
+  const terminar = () => {
+    document.body.classList.remove("imprimindo");
+    caixa.replaceChildren();
+    window.removeEventListener("afterprint", terminar);
+  };
+  window.addEventListener("afterprint", terminar);
+  window.print();
+}
+
+async function relatorioConsolidado() {
+  const botao = document.getElementById("baixar-relatorio");
+  botao.disabled = true;
+  try {
+    const d = await carregarRetrato();
+    const quais = estado.grupo === "projetos" ? "projetos" : "matérias";
+    const abas = ORDEM_COMISSOES.map((sigla) => {
+      const mats = d.materias.filter((m) => m.c === sigla && (estado.grupo === "todas" || m.p));
+      return {
+        nome: sigla, titulo: `Acervo de ${quais} em análise — ${sigla === "SAUDE" ? "SAÚDE" : sigla}`,
+        informacoes: [["Última atualização", dataHora(d.coletado_em)], ["Fonte", RELATORIO]],
+        colunas: COLUNAS_EXPORTACAO,
+        linhas: ordenar(mats, { campo: "r", desc: true }).map((m) => linhaExportacao(m, true)),
+      };
+    });
+    const coleta = d.coletado_em.slice(0, 16).replace("T", "_").replace(":", "");
+    baixar(await PlanilhaXlsx.gerar(abas), `acervo-comissoes-cmsp_${coleta}_${estado.grupo}.xlsx`);
+  } catch (e) {
+    mostrarErro(`Não foi possível gerar o relatório: ${e.message}`);
+  } finally {
+    botao.disabled = false;
+  }
+}
+
+// ----------------------------------------------------------------------------- pesquisa por autor
+function noSelecao(m) {
+  const pessoas = retrato.dados.pessoas;
+  return retrato.selecao.some((s) => (s.tipo === "autor" ? m.a.includes(s.chave)
+                                                         : m.a.some((a) => pessoas[a][1] === s.chave)));
+}
+
+function nomeSelecao(s) {
+  if (s.tipo === "partido") return `Partido: ${s.chave}`;
+  const [nome, grupo] = retrato.dados.pessoas[s.chave];
+  return grupo in GRUPOS_ESPECIAIS ? nome : `${nome} (${grupo})`;
+}
+
+function alternarSelecao(item) {
+  const i = retrato.selecao.findIndex((s) => s.tipo === item.tipo && s.chave === item.chave);
+  if (i >= 0) retrato.selecao.splice(i, 1);
+  else retrato.selecao.push(item);
+  renderRetrato();
+}
+
+function opcoesAutoria(mats) {
+  const autores = agrupar(mats, "autor").filter((l) => l.chave !== -1);
+  const partidos = agrupar(mats, "partido").filter((l) => !(l.chave in GRUPOS_ESPECIAIS) && l.chave !== "—");
+  return { autores, partidos };
+}
+
+function renderSugestoes(mats, abrirTudo = false) {
+  const entrada = document.getElementById("busca-autor");
+  const ul = document.getElementById("sugestoes-autor");
+  const termo = semAcento(entrada.value.trim());
+  if (!termo && !abrirTudo) {
+    ul.hidden = true;
+    entrada.setAttribute("aria-expanded", "false");
+    return;
+  }
+  const { autores, partidos } = opcoesAutoria(mats);
+  const opcoes = [
+    ...partidos.map((l) => ({ tipo: "partido", chave: l.chave, texto: `Todos do ${l.chave}`, info: `partido · ${fmt(l.total)}` })),
+    ...autores.map((l) => ({ tipo: "autor", chave: l.chave, texto: l.nome, info: `${l.grupo || "autor"} · ${fmt(l.total)}` })),
+  ].filter((o) => !termo || semAcento(`${o.texto} ${o.info}`).includes(termo))
+   .filter((o) => !retrato.selecao.some((s) => s.tipo === o.tipo && s.chave === o.chave));
+  ul.replaceChildren(...opcoes.slice(0, 50).map((o, i) => {
+    const li = el("li");
+    li.id = `sugestao-${i}`;
+    li.setAttribute("role", "option");
+    li.setAttribute("aria-selected", "false");
+    li.append(el("span", null, o.texto), el("span", "tipo", o.info));
+    li.addEventListener("mousedown", (ev) => { ev.preventDefault(); escolherSugestao(o); });
+    li.opcao = o;
+    return li;
+  }));
+  if (!opcoes.length) ul.replaceChildren(el("li", "vazio", "Nenhum autor ou partido encontrado."));
+  ul.hidden = false;
+  entrada.setAttribute("aria-expanded", "true");
+}
+
+function escolherSugestao(o) {
+  const entrada = document.getElementById("busca-autor");
+  entrada.value = "";
+  document.getElementById("sugestoes-autor").hidden = true;
+  entrada.setAttribute("aria-expanded", "false");
+  entrada.removeAttribute("aria-activedescendant");
+  alternarSelecao({ tipo: o.tipo, chave: o.chave });
+}
+
+function renderAutoria(mats) {
+  const { autores, partidos } = opcoesAutoria(mats);
+  document.getElementById("autor-contagem").textContent =
+    `${fmt(autores.length)} autores ou órgãos identificados nesta seleção de comissão.`;
+
+  // Seleção rápida por partido
+  const chips = document.getElementById("chips-partidos");
+  chips.replaceChildren(...[...partidos].sort((a, b) => a.chave.localeCompare(b.chave, "pt-BR")).map((l) => {
+    const b = el("button", null, l.chave);
+    b.type = "button";
+    const ativo = retrato.selecao.some((s) => s.tipo === "partido" && s.chave === l.chave);
+    b.setAttribute("aria-pressed", String(ativo));
+    b.title = `${fmt(l.total)} matérias de autores do ${l.chave}`;
+    b.addEventListener("click", () => alternarSelecao({ tipo: "partido", chave: l.chave }));
+    return b;
+  }));
+
+  // Seleção atual
+  const ul = document.getElementById("chips-selecao");
+  ul.replaceChildren(...retrato.selecao.map((s) => {
+    const li = el("li", "chip", nomeSelecao(s));
+    const x = el("button", null, "×");
+    x.type = "button";
+    x.setAttribute("aria-label", `Remover ${nomeSelecao(s)}`);
+    x.addEventListener("click", () => alternarSelecao(s));
+    li.append(x);
+    return li;
+  }));
+  document.getElementById("selecao-vazia").hidden = retrato.selecao.length > 0;
+  document.getElementById("limpar-selecao").hidden = !retrato.selecao.length;
+
+  // Lista nominal (clicar inclui na seleção)
+  const linhas = retrato.agrupar === "autor" ? autores : agrupar(mats, "partido");
+  for (const b of document.querySelectorAll('#r-autores .alternador[data-grupo="agrupar"] button')) {
+    b.setAttribute("aria-pressed", String(b.dataset.modo === retrato.agrupar));
+  }
+  const tipo = retrato.agrupar;
+  renderBarras("r-autores", tipo, linhas,
+               (l) => { if (l.chave !== "—") alternarSelecao({ tipo, chave: l.chave }); },
+               (l) => retrato.selecao.some((s) => s.tipo === tipo && s.chave === l.chave));
+
+  renderResultado(mats);
+}
+
+function renderResultado(mats) {
+  const caixa = document.getElementById("resultado-autor");
+  caixa.hidden = !retrato.selecao.length;
+  if (caixa.hidden) return;
+  const selecionadas = mats.filter(noSelecao);
+  const recebidas = selecionadas.filter((m) => m.dc != null).map((m) => m.dc).sort((a, b) => a - b);
+  const meio = Math.floor(recebidas.length / 2);
+  const mediana = !recebidas.length ? null
+    : recebidas.length % 2 ? recebidas[meio] : Math.floor((recebidas[meio - 1] + recebidas[meio]) / 2);
+  const semRelator = selecionadas.filter((m) => m.rel == null).length;
+  const mais180 = selecionadas.filter((m) => m.dc != null && m.dc > 180).length;
+  const quais = estado.grupo === "projetos" ? "projeto(s) encontrado(s)" : "matéria(s) encontrada(s)";
+  const kpis = [
+    { rotulo: "Na seleção", valor: fmt(selecionadas.length), nota: quais },
+    { rotulo: "Sem relator", valor: fmt(semRelator), nota: `${porcento(semRelator, selecionadas.length)} da seleção` },
+    { rotulo: "Mais de 180 dias", valor: fmt(mais180), nota: `${porcento(mais180, selecionadas.length)} da seleção` },
+    { rotulo: "Idade mediana", valor: mediana == null ? "—" : `${fmt(mediana)} dias`, nota: "metade da seleção abaixo" },
+  ];
+  document.getElementById("kpis-selecao").replaceChildren(...kpis.map((k) => {
+    const div = el("div", "kpi");
+    div.append(el("p", "rotulo", k.rotulo), el("p", "valor", k.valor), el("p", "nota", k.nota));
+    return div;
+  }));
+
+  const c = cores();
+  const contagem = {};
+  for (const m of selecionadas) {
+    const f = faixaDe(m.dc, AGUARDANDO);
+    contagem[f] = (contagem[f] || 0) + 1;
+  }
+  const faixas = [...FAIXAS_TEMPO].reverse().concat(AGUARDANDO).filter((f) => f !== AGUARDANDO || contagem[f.chave]);
+  document.getElementById("faixas-selecao").replaceChildren(...faixas.map((f) => {
+    const li = el("li");
+    li.style.borderLeftColor = c.v(f.cor);
+    li.append(el("strong", null, fmt(contagem[f.chave] || 0)), el("span", null, f.nome));
+    return li;
+  }));
+
+  renderBarras("s-relator", "relator", agrupar(selecionadas, "relator"),
+               (l, faixa, nome) => abrirLista(rotuloRecorte(`Relator: ${nome}`, faixa),
+                                              selecionadas.filter((m) => noRecorte(m, { dim: "relator", chave: l.chave, faixa }))));
+  renderBarras("s-passo", "passo", agrupar(selecionadas, "passo"),
+               (l, faixa, nome) => abrirLista(rotuloRecorte(`Estado: ${nome}`, faixa),
+                                              selecionadas.filter((m) => noRecorte(m, { dim: "passo", chave: l.chave, faixa }))));
+}
+
+function rotuloRecorte(base, faixa) {
+  return faixa ? `${base} · ${nomeFaixa(faixa)}` : base;
+}
+
+// ----------------------------------------------------------------------------- retrato
 function renderRetrato() {
   const d = retrato.dados;
   const mats = materiasDoFiltro();
-  const onde = estado.comissao === "TODAS" ? "nas 7 comissões" : `na ${estado.comissao}`;
   const quais = estado.grupo === "projetos" ? "projetos" : "matérias";
   document.getElementById("nota-retrato").textContent =
-    `Retrato de ${dataBR(utc(d.data))}: ${fmt(mats.length)} ${quais} em análise ${onde}. ` +
-    "As idades contam dias completos até a coleta.";
-  sincronizarAlternadores();
-  renderBarras("r-relator", "relator", agrupar(mats, "relator"), retrato.modos["r-relator"] === "idade");
-  renderBarras("r-passo", "passo", agrupar(mats, "passo"), retrato.modos["r-passo"] === "idade");
-  let porAutoria = agrupar(mats, retrato.agrupar);
-  if (retrato.busca.trim()) {
-    const busca = semAcento(retrato.busca.trim());
-    porAutoria = porAutoria.filter((l) => semAcento(`${l.nome} ${l.grupo}`).includes(busca));
-  }
-  renderBarras("r-autoria", retrato.agrupar, porAutoria, retrato.modos["r-autoria"] === "idade");
-  renderLista(mats);
+    `Retrato de ${dataBR(utc(d.data))}, com ${fmt(mats.length)} ${quais}. Gráficos interativos: clique ou toque ` +
+    "em qualquer barra ou trecho colorido para abrir a lista completa das matérias daquele recorte, acessar os " +
+    "projetos no SPLEGIS e exportar a seleção.";
+  renderBarras("r-relator", "relator", agrupar(mats, "relator"),
+               (l, faixa, nome) => abrirLista(rotuloRecorte(`Relator: ${nome}`, faixa),
+                                              mats.filter((m) => noRecorte(m, { dim: "relator", chave: l.chave, faixa }))));
+  renderBarras("r-passo", "passo", agrupar(mats, "passo"),
+               (l, faixa, nome) => abrirLista(rotuloRecorte(`Estado: ${nome}`, faixa),
+                                              mats.filter((m) => noRecorte(m, { dim: "passo", chave: l.chave, faixa }))));
+  renderAutoria(mats);
 }
 
 function iniciarRetrato() {
@@ -863,35 +1122,76 @@ function iniciarRetrato() {
       renderRetrato();
     });
   }
-  document.querySelector('#r-autoria .alternador[data-grupo="agrupar"]').addEventListener("click", (ev) => {
+  document.querySelector('#r-autores .alternador[data-grupo="agrupar"]').addEventListener("click", (ev) => {
     const b = ev.target.closest("button");
     if (!b) return;
     retrato.agrupar = b.dataset.modo;
     renderRetrato();
   });
-  let espera;
-  document.getElementById("busca-autoria").addEventListener("input", (ev) => {
-    clearTimeout(espera);
-    espera = setTimeout(() => { retrato.busca = ev.target.value; renderRetrato(); }, 150);
-  });
-  document.getElementById("lista-limpar").addEventListener("click", () => {
-    retrato.recorte = null;
-    retrato.limite = 50;
+  document.getElementById("ver-todas").addEventListener("click", () =>
+    abrirLista(estado.grupo === "projetos" ? "Todos os projetos" : "Todas as matérias", materiasDoFiltro()));
+  document.getElementById("limpar-selecao").addEventListener("click", () => {
+    retrato.selecao = [];
     renderRetrato();
   });
-  document.getElementById("lista-csv").addEventListener("click", csvLista);
-  document.getElementById("lista-mais").addEventListener("click", () => {
-    retrato.limite += 50;
-    renderLista(materiasDoFiltro());
+  document.getElementById("selecao-lista").addEventListener("click", () =>
+    abrirLista("Autores: seleção completa", materiasDoFiltro().filter(noSelecao)));
+  for (const b of document.querySelectorAll("[data-exportar-selecao]")) {
+    b.addEventListener("click", () => exportar(b.dataset.exportarSelecao, "Autores: seleção completa",
+                                              materiasDoFiltro().filter(noSelecao)));
+  }
+
+  // Combobox de autores e partidos
+  const entrada = document.getElementById("busca-autor");
+  const ul = document.getElementById("sugestoes-autor");
+  let ativo = -1;
+  const marcar = (i) => {
+    const itens = [...ul.querySelectorAll("li[role=option]")];
+    if (!itens.length) return;
+    ativo = (i + itens.length) % itens.length;
+    itens.forEach((li, k) => li.setAttribute("aria-selected", String(k === ativo)));
+    entrada.setAttribute("aria-activedescendant", itens[ativo].id);
+    itens[ativo].scrollIntoView({ block: "nearest" });
+  };
+  entrada.addEventListener("input", () => { ativo = -1; renderSugestoes(materiasDoFiltro()); });
+  entrada.addEventListener("focus", () => { if (entrada.value) renderSugestoes(materiasDoFiltro()); });
+  entrada.addEventListener("blur", () => setTimeout(() => { ul.hidden = true; entrada.setAttribute("aria-expanded", "false"); }, 120));
+  entrada.addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowDown") { if (ul.hidden) renderSugestoes(materiasDoFiltro(), true); marcar(ativo + 1); ev.preventDefault(); }
+    else if (ev.key === "ArrowUp") { marcar(ativo - 1); ev.preventDefault(); }
+    else if (ev.key === "Enter") {
+      const itens = [...ul.querySelectorAll("li[role=option]")];
+      const li = itens[ativo] || itens[0];
+      if (li && !ul.hidden) { escolherSugestao(li.opcao); ev.preventDefault(); }
+    } else if (ev.key === "Escape") { ul.hidden = true; entrada.setAttribute("aria-expanded", "false"); }
   });
-  document.querySelector("#r-lista .lista").addEventListener("click", (ev) => {
+  document.getElementById("abrir-sugestoes").addEventListener("mousedown", (ev) => {
+    ev.preventDefault();
+    if (ul.hidden) { entrada.focus(); renderSugestoes(materiasDoFiltro(), true); }
+    else ul.hidden = true;
+  });
+
+  // Janela da lista
+  const dialogo = document.getElementById("janela-lista");
+  document.getElementById("janela-fechar").addEventListener("click", () => dialogo.close());
+  dialogo.addEventListener("click", (ev) => { if (ev.target === dialogo) dialogo.close(); });  // clique fora
+  document.getElementById("janela-mais").addEventListener("click", () => {
+    retrato.janela.limite += 100;
+    renderJanela();
+  });
+  document.getElementById("janela-tabela").addEventListener("click", (ev) => {
     const b = ev.target.closest("th button");
     if (!b) return;
     const campo = b.dataset.campo;
-    const textual = ["c", "r", "aut", "rel"].includes(campo);
-    retrato.ordem = { campo, desc: retrato.ordem.campo === campo ? !retrato.ordem.desc : !textual };
-    renderLista(materiasDoFiltro());
+    const textual = !["dc", "dp"].includes(campo);
+    const atual = retrato.janela.ordem;
+    retrato.janela.ordem = { campo, desc: atual.campo === campo ? !atual.desc : !textual };
+    renderJanela();
   });
+  for (const b of dialogo.querySelectorAll("[data-exportar]")) {
+    b.addEventListener("click", () => exportar(b.dataset.exportar, retrato.janela.titulo, retrato.janela.lista));
+  }
+  document.getElementById("baixar-relatorio").addEventListener("click", relatorioConsolidado);
 
   // Dica dos trechos das barras: valor primeiro, nome depois.
   const dica = document.getElementById("dica-barras");
@@ -931,7 +1231,11 @@ function lerEndereco() {
 }
 
 function sincronizar() {
-  document.getElementById("f-comissao").value = estado.comissao;
+  for (const b of document.querySelectorAll("#f-comissao button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.comissao === estado.comissao));
+  }
+  document.getElementById("nome-comissao").textContent = estado.comissao === "TODAS"
+    ? "Todas as comissões permanentes" : `${estado.comissao} · ${COMISSOES.find(([s]) => s === estado.comissao)[1]}`;
   document.getElementById("f-grupo").value = estado.grupo;
   document.getElementById("f-periodo").value = estado.periodo;
   history.replaceState(null, "", `#${new URLSearchParams(estado)}`);
@@ -949,13 +1253,22 @@ function aplicarTema(tema) {
 function iniciar() {
   lerEndereco();
   preencher(document.getElementById("f-periodo"), PERIODOS, estado.periodo);
-  preencher(document.getElementById("f-comissao"),
-            COMISSOES.map(([s, n]) => [s, s === "TODAS" ? n : `${s} · ${n}`]), estado.comissao);
   preencher(document.getElementById("f-grupo"), GRUPOS, estado.grupo);
-  for (const [id, chave] of [["f-periodo", "periodo"], ["f-comissao", "comissao"], ["f-grupo", "grupo"]]) {
+  document.getElementById("f-comissao").replaceChildren(...COMISSOES.map(([sigla, nome]) => {
+    const b = el("button", null, sigla === "TODAS" ? "Todas" : sigla === "SAUDE" ? "SAÚDE" : sigla);
+    b.type = "button";
+    b.dataset.comissao = sigla;
+    b.title = nome;
+    b.addEventListener("click", () => {
+      estado.comissao = sigla;
+      sincronizar();
+      render();
+    });
+    return b;
+  }));
+  for (const [id, chave] of [["f-periodo", "periodo"], ["f-grupo", "grupo"]]) {
     document.getElementById(id).addEventListener("change", (ev) => {
       estado[chave] = ev.target.value;
-      retrato.recorte = null;  // a seleção da lista vale para a comissão e o grupo em que foi feita
       sincronizar();
       render();
     });
@@ -974,6 +1287,18 @@ function iniciar() {
     render();
     document.getElementById(`aba-${estado.aba}`).focus();
   });
+  // Atalhos do topo: "Por autor" fica na aba do retrato; os demais, no fim da página.
+  for (const a of document.querySelectorAll(".atalhos a")) {
+    a.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      if (a.dataset.aba && estado.aba !== a.dataset.aba) {
+        estado.aba = a.dataset.aba;
+        sincronizar();
+        await render();
+      }
+      document.querySelector(a.getAttribute("href")).scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
   iniciarRetrato();
   aplicarTema(document.documentElement.dataset.theme || "");
   document.getElementById("tema").addEventListener("click", () => {

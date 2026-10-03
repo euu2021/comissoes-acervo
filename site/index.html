@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Acervo das Comissões — CMSP</title>
-  <meta name="description" content="Evolução diária das matérias em análise nas 7 Comissões Permanentes da Câmara Municipal de São Paulo, desde novembro de 2018.">
+  <meta name="description" content="Matérias em análise nas 7 Comissões Permanentes da Câmara Municipal de São Paulo: o retrato de cada dia, por relator, estado da tramitação e autoria, e a evolução desde novembro de 2018.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M7 23V15M13 23V10M19 23V13M25 23V7' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="estilo.css?v=dev">
   <script>
@@ -15,29 +15,175 @@
 <div class="pagina">
   <header class="topo">
     <div>
-      <p class="sobretitulo">Dados públicos do SPLEGIS</p>
+      <p class="sobretitulo">Processo legislativo · dados públicos do SPLEGIS</p>
       <h1>Acervo das Comissões</h1>
-      <p class="lead">Quantas matérias esperam análise nas 7 Comissões Permanentes da Câmara Municipal de São Paulo, há quanto tempo e em que passo da tramitação estão, dia a dia, desde novembro de 2018.</p>
+      <p class="lead">Quantas matérias esperam análise nas 7 Comissões Permanentes da Câmara Municipal de São Paulo, com quem, há quanto tempo e em que estado da tramitação, no retrato de cada dia e na evolução desde novembro de 2018.</p>
     </div>
-    <p class="atualizacao" id="atualizacao"></p>
+    <div class="topo-lado">
+      <button class="botao destaque" type="button" id="baixar-relatorio">↓ Baixar relatório consolidado <small>XLSX · 7 abas</small></button>
+      <a class="link-externo" href="https://splegisconsulta.saopaulo.sp.leg.br/" target="_blank" rel="noopener">Abrir SPLEGIS Consulta ↗</a>
+      <p class="atualizacao" id="atualizacao"></p>
+    </div>
   </header>
 
-  <div class="abas" role="tablist" aria-label="Visões do painel">
-    <button type="button" role="tab" id="aba-evolucao" aria-controls="painel-evolucao" aria-selected="true">Evolução</button>
-    <button type="button" role="tab" id="aba-retrato" aria-controls="painel-retrato" aria-selected="false">Retrato do dia</button>
+  <div class="navegacao">
+    <div class="abas" role="tablist" aria-label="Visões do painel">
+      <button type="button" role="tab" id="aba-retrato" aria-controls="painel-retrato" aria-selected="true">Retrato do dia</button>
+      <button type="button" role="tab" id="aba-evolucao" aria-controls="painel-evolucao" aria-selected="false">Evolução</button>
+    </div>
+    <nav class="atalhos" aria-label="Seções">
+      <a href="#por-autor" data-aba="retrato">Por autor</a>
+      <a href="#metodologia">Metodologia</a>
+      <a href="#sobre-os-dados">Sobre os dados</a>
+    </nav>
   </div>
 
   <nav class="filtros" aria-label="Filtros do painel">
-    <label id="filtro-periodo">Período <select id="f-periodo"></select></label>
-    <label>Comissão <select id="f-comissao"></select></label>
+    <div class="filtro-comissao" role="group" aria-labelledby="rotulo-comissao">
+      <span class="rotulo-filtro" id="rotulo-comissao">Comissão</span>
+      <div class="comissoes" id="f-comissao"></div>
+    </div>
     <label>Matérias <select id="f-grupo"></select></label>
+    <label id="filtro-periodo">Período <select id="f-periodo"></select></label>
     <button class="botao tema" id="tema" type="button" aria-label="Alternar tema"></button>
   </nav>
+  <p class="nome-comissao" id="nome-comissao"></p>
 
   <main id="conteudo" aria-live="polite">
     <section class="kpis" id="kpis" aria-label="Números do último dia"></section>
 
-    <div id="painel-evolucao" role="tabpanel" aria-labelledby="aba-evolucao">
+    <div id="painel-retrato" role="tabpanel" aria-labelledby="aba-retrato">
+      <p class="nota-retrato" id="nota-retrato"></p>
+
+      <figure class="cartao barras-cartao" id="r-relator">
+        <div class="cartao-topo">
+          <div>
+            <p class="sobretitulo">Distribuição</p>
+            <h2>Acervo por relator designado</h2>
+            <p class="sub">Quantidade de matérias atribuídas a cada relator.</p>
+          </div>
+          <div class="controles">
+            <button class="botao" type="button" id="ver-todas">Ver todas as matérias</button>
+            <div class="alternador" role="group" aria-label="Mostrar">
+              <button type="button" data-modo="total">Quantitativo geral</button><button type="button" data-modo="idade">Por idade do acervo</button>
+            </div>
+          </div>
+        </div>
+        <ul class="legenda"></ul>
+        <ol class="barras"></ol>
+        <button class="botao mais" type="button"></button>
+        <p class="nota-grafico">ⓘ Critério de idade: dias na comissão. Clique numa barra ou num trecho dela para abrir as matérias.</p>
+      </figure>
+
+      <figure class="cartao barras-cartao" id="r-passo">
+        <div class="cartao-topo">
+          <div>
+            <p class="sobretitulo">Distribuição</p>
+            <h2>Acervo por estado de tramitação</h2>
+            <p class="sub">Estado atual indicado na tramitação interna, como "Estudo para manifestação do relator", com a área ao lado.</p>
+          </div>
+          <div class="alternador" role="group" aria-label="Mostrar">
+            <button type="button" data-modo="total">Quantitativo geral</button><button type="button" data-modo="idade">Por idade no estado</button>
+          </div>
+        </div>
+        <ul class="legenda"></ul>
+        <ol class="barras"></ol>
+        <button class="botao mais" type="button"></button>
+        <p class="nota-grafico">ⓘ Critério de idade: dias no estado atual. Clique numa barra ou num trecho dela para abrir as matérias.</p>
+      </figure>
+
+      <section class="cartao" id="por-autor" aria-labelledby="titulo-autor">
+        <p class="sobretitulo">Consulta interativa</p>
+        <h2 id="titulo-autor">Pesquisar matérias por autor</h2>
+        <p class="sub">Escolha um ou mais autores, ou inclua todos os autores de um partido, para analisar as matérias selecionadas por idade, relatoria e estado da tramitação.</p>
+        <p class="contagem" id="autor-contagem"></p>
+        <div class="autor-grade">
+          <div class="autor-controles">
+            <label class="rotulo-filtro" for="busca-autor">Adicionar autor ou partido</label>
+            <div class="combo">
+              <input id="busca-autor" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false"
+                     aria-controls="sugestoes-autor" placeholder="Digite um nome ou sigla" autocomplete="off">
+              <button type="button" class="combo-abrir" id="abrir-sugestoes" aria-label="Mostrar opções" tabindex="-1">▾</button>
+              <ul id="sugestoes-autor" role="listbox" class="sugestoes" aria-label="Autores e partidos" hidden></ul>
+            </div>
+            <p class="rotulo-filtro">Seleção rápida por partido</p>
+            <div class="chips" id="chips-partidos"></div>
+            <div class="selecao-atual">
+              <div class="selecao-topo">
+                <p class="rotulo-filtro">Seleção atual</p>
+                <button type="button" class="botao pequeno" id="limpar-selecao">Limpar</button>
+              </div>
+              <ul class="chips" id="chips-selecao"></ul>
+              <p class="vazio" id="selecao-vazia">Nenhum autor selecionado. Use a busca, os partidos ou a lista nominal.</p>
+            </div>
+          </div>
+          <div class="autor-lista barras-cartao" id="r-autores">
+            <div class="cartao-topo">
+              <div>
+                <h3>Autores com matérias nesta comissão</h3>
+                <p class="sub">O Executivo reúne os diferentes prefeitos; a Mesa Diretora, os diferentes períodos e legislaturas. Clique num nome para incluí-lo na seleção.</p>
+              </div>
+              <div class="controles">
+                <div class="alternador" role="group" aria-label="Organizar lista" data-grupo="agrupar">
+                  <button type="button" data-modo="autor">Por autor</button><button type="button" data-modo="partido">Por partido</button>
+                </div>
+                <div class="alternador" role="group" aria-label="Mostrar">
+                  <button type="button" data-modo="total">Total</button><button type="button" data-modo="idade">Por idade</button>
+                </div>
+              </div>
+            </div>
+            <ul class="legenda"></ul>
+            <ol class="barras"></ol>
+            <button class="botao mais" type="button"></button>
+          </div>
+        </div>
+
+        <div class="resultado" id="resultado-autor" hidden>
+          <p class="sobretitulo">Resultado da seleção</p>
+          <div class="kpis kpis-selecao" id="kpis-selecao"></div>
+          <div class="acoes-selecao">
+            <button class="botao" type="button" id="selecao-lista">Abrir lista completa</button>
+            <button class="botao" type="button" data-exportar-selecao="csv">Exportar CSV</button>
+            <button class="botao" type="button" data-exportar-selecao="xlsx">Exportar Excel</button>
+            <button class="botao" type="button" data-exportar-selecao="pdf">Exportar PDF</button>
+          </div>
+          <ul class="faixas-selecao" id="faixas-selecao"></ul>
+          <p class="nota-grafico">ⓘ Em matérias com coautoria, a seleção por nome ou partido usa o conjunto dos autores e conta cada matéria uma única vez.</p>
+          <div class="grade-dupla">
+            <figure class="barras-cartao" id="s-relator">
+              <div class="cartao-topo">
+                <div>
+                  <p class="sobretitulo">Seleção por autoria</p>
+                  <h3>Matérias por relator</h3>
+                </div>
+                <div class="alternador" role="group" aria-label="Mostrar">
+                  <button type="button" data-modo="total">Total</button><button type="button" data-modo="idade">Por idade</button>
+                </div>
+              </div>
+              <ul class="legenda"></ul>
+              <ol class="barras"></ol>
+              <button class="botao mais" type="button"></button>
+            </figure>
+            <figure class="barras-cartao" id="s-passo">
+              <div class="cartao-topo">
+                <div>
+                  <p class="sobretitulo">Seleção por autoria</p>
+                  <h3>Matérias por estado de tramitação</h3>
+                </div>
+                <div class="alternador" role="group" aria-label="Mostrar">
+                  <button type="button" data-modo="total">Total</button><button type="button" data-modo="idade">Por idade</button>
+                </div>
+              </div>
+              <ul class="legenda"></ul>
+              <ol class="barras"></ol>
+              <button class="botao mais" type="button"></button>
+            </figure>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="painel-evolucao" role="tabpanel" aria-labelledby="aba-evolucao" hidden>
     <figure class="cartao" id="c-acervo">
       <div class="cartao-topo">
         <div>
@@ -95,106 +241,60 @@
       <div class="grafico" tabindex="0"></div>
     </figure>
     </div>
-
-    <div id="painel-retrato" role="tabpanel" aria-labelledby="aba-retrato" hidden>
-      <p class="nota-retrato" id="nota-retrato"></p>
-
-      <figure class="cartao barras-cartao" id="r-relator">
-        <div class="cartao-topo">
-          <div>
-            <h2>Por relator</h2>
-            <p class="sub">Matérias com cada relator designado. Clique numa barra, ou num trecho dela, para listar as matérias.</p>
-          </div>
-          <div class="alternador" role="group" aria-label="Mostrar">
-            <button type="button" data-modo="total">Total</button><button type="button" data-modo="idade">Por idade</button>
-          </div>
-        </div>
-        <ul class="legenda"></ul>
-        <ol class="barras"></ol>
-        <button class="botao mais" type="button"></button>
-      </figure>
-
-      <figure class="cartao barras-cartao" id="r-passo">
-        <div class="cartao-topo">
-          <div>
-            <h2>Por passo da tramitação interna</h2>
-            <p class="sub">O passo interno em que cada matéria está na comissão, como "Estudo para manifestação do relator".</p>
-          </div>
-          <div class="alternador" role="group" aria-label="Mostrar">
-            <button type="button" data-modo="total">Total</button><button type="button" data-modo="idade">Por tempo no passo</button>
-          </div>
-        </div>
-        <ul class="legenda"></ul>
-        <ol class="barras"></ol>
-        <button class="botao mais" type="button"></button>
-      </figure>
-
-      <figure class="cartao barras-cartao" id="r-autoria">
-        <div class="cartao-topo">
-          <div>
-            <h2>Por autoria</h2>
-            <p class="sub">Matérias de cada autor ou partido. Uma matéria com vários autores conta para cada um deles. O Executivo reúne os prefeitos, e a Mesa Diretora, as várias composições.</p>
-          </div>
-          <div class="controles">
-            <div class="alternador" role="group" aria-label="Agrupar por" data-grupo="agrupar">
-              <button type="button" data-modo="autor">Autor</button><button type="button" data-modo="partido">Partido</button>
-            </div>
-            <div class="alternador" role="group" aria-label="Mostrar">
-              <button type="button" data-modo="total">Total</button><button type="button" data-modo="idade">Por idade</button>
-            </div>
-          </div>
-        </div>
-        <label class="busca">Filtrar <input type="search" id="busca-autoria" placeholder="nome ou partido" autocomplete="off"></label>
-        <ul class="legenda"></ul>
-        <ol class="barras"></ol>
-        <button class="botao mais" type="button"></button>
-      </figure>
-
-      <section class="cartao" id="r-lista" aria-labelledby="lista-titulo">
-        <div class="cartao-topo">
-          <div>
-            <h2 id="lista-titulo">Matérias</h2>
-            <p class="sub" id="lista-sub"></p>
-          </div>
-          <div class="acoes">
-            <button class="botao" type="button" id="lista-limpar">Limpar seleção</button>
-            <button class="botao" type="button" id="lista-csv">Baixar CSV</button>
-          </div>
-        </div>
-        <div class="tabela lista"></div>
-        <button class="botao mais" type="button" id="lista-mais"></button>
-      </section>
-    </div>
   </main>
-  <div class="dica dica-barras" id="dica-barras" hidden></div>
 
   <div class="sobre">
-    <section>
-      <h2>De onde vêm os dados</h2>
-      <p>Do SPLEGIS, o sistema do processo legislativo da Câmara. Desde 2 de outubro de 2026, um robô copia todo dia o relatório <a href="https://splegisconsulta.saopaulo.sp.leg.br/Relatorio/IndexComissaoProjetoTramitacaoInterna">Projetos em Análise nas Comissões</a>. O período anterior, desde novembro de 2018, foi reconstruído a partir dos eventos de tramitação que o SPLEGIS registra dia a dia e conferido contra o histórico oficial das matérias (<a href="https://github.com/prototiposlegisla/comissoes-acervo/blob/main/dados/reconstrucao/README.md">método e validação</a>).</p>
+    <section id="metodologia">
+      <p class="sobretitulo">Metodologia</p>
+      <h2>Como o acervo é tratado</h2>
+      <ol class="passos">
+        <li><strong>Consulta pública.</strong> Três vezes por dia, um robô lê o relatório <a href="https://splegisconsulta.saopaulo.sp.leg.br/Relatorio/IndexComissaoProjetoTramitacaoInterna" target="_blank" rel="noopener">Projetos em Análise nas Comissões</a> do SPLEGIS, com todas as matérias das sete comissões.</li>
+        <li><strong>Normalização.</strong> Cada matéria vira uma linha com a tramitação externa (data, origem, recebimento) e a interna (data, área e estado) separadas, o relator e os autores, com os prefeitos agrupados em Executivo e as composições da Mesa em Mesa Diretora.</li>
+        <li><strong>Indicadores.</strong> A idade conta dias completos desde o recebimento pela comissão (ou desde a entrada no estado atual), nas faixas de até 30, 31 a 90, 91 a 180, 181 a 365 e mais de 365 dias. Matérias enviadas e ainda não recebidas fazem parte do acervo, como no relatório.</li>
+        <li><strong>Série histórica.</strong> Cada retrato fica guardado. O período de novembro de 2018 a outubro de 2026 foi reconstruído a partir dos eventos de tramitação que o SPLEGIS registra dia a dia e conferido contra o histórico oficial das matérias (<a href="https://github.com/prototiposlegisla/comissoes-acervo/blob/main/dados/reconstrucao/README.md">método e validação</a>).</li>
+      </ol>
+    </section>
+    <section id="sobre-os-dados">
+      <p class="sobretitulo">Sobre os dados</p>
+      <h2>Fonte e atualização</h2>
+      <p>A fonte é o relatório oficial do SPLEGIS, consultado às 10h, às 15h e às 21h47 (horário de Brasília). Cada dia mostra o acervo da última consulta; se a da noite atrasar para a madrugada, ela ainda vale para o dia anterior. A identificação de relator só existe nos retratos diários, desde 2 de outubro de 2026.</p>
+      <p class="links"><a href="https://splegisconsulta.saopaulo.sp.leg.br/Relatorio/IndexComissaoProjetoTramitacaoInterna" target="_blank" rel="noopener">Abrir relatório de origem ↗</a> <a href="https://splegisws.saopaulo.sp.leg.br/ws/ws2.asmx" target="_blank" rel="noopener">Serviços de integração ↗</a></p>
     </section>
     <section>
-      <h2>Como ler</h2>
-      <ul>
-        <li>Cada dia mostra o acervo no fim daquele dia. A coleta roda à noite; quando atrasa para a madrugada seguinte, ainda vale para o dia anterior.</li>
-        <li>Uma matéria entra no acervo quando é enviada à comissão e sai quando a comissão a envia adiante. Enviadas e ainda não recebidas contam como "aguardando recebimento".</li>
-        <li>A idade conta dias completos desde o recebimento; ao voltar a uma comissão, a matéria recomeça a contagem.</li>
-        <li>Quem é o relator só se sabe pelos retratos diários; na reconstrução não há essa informação.</li>
-      </ul>
-    </section>
-    <section>
-      <h2>Dados abertos</h2>
+      <p class="sobretitulo">Dados abertos</p>
+      <h2>Código e dados</h2>
       <p>Todos os números estão no <a href="https://github.com/prototiposlegisla/comissoes-acervo">repositório no GitHub</a>, em CSV: o retrato de cada dia, o histórico em intervalos e a série reconstruída. O código é aberto, sob a licença MIT.</p>
     </section>
   </div>
 
   <footer class="rodape">
-    <p>Código e dados no <a href="https://github.com/prototiposlegisla/comissoes-acervo">GitHub</a>. Gráficos feitos com <a href="https://observablehq.com/plot/">Observable Plot</a>.</p>
+    <p>Fonte: <a href="https://splegisconsulta.saopaulo.sp.leg.br/" target="_blank" rel="noopener">SPLEGIS Consulta</a> · Câmara Municipal de São Paulo. Código e dados no <a href="https://github.com/prototiposlegisla/comissoes-acervo">GitHub</a>. Gráficos feitos com <a href="https://observablehq.com/plot/">Observable Plot</a>.</p>
   </footer>
 </div>
 
+<dialog class="janela" id="janela-lista" aria-labelledby="janela-titulo">
+  <div class="janela-topo">
+    <div>
+      <p class="sobretitulo">Matérias do recorte</p>
+      <h2 id="janela-titulo"></h2>
+      <p class="sub" id="janela-sub"></p>
+    </div>
+    <div class="acoes">
+      <button class="botao" type="button" data-exportar="csv">Exportar CSV</button>
+      <button class="botao" type="button" data-exportar="xlsx">Exportar Excel</button>
+      <button class="botao" type="button" data-exportar="pdf">Exportar PDF</button>
+      <button class="botao fechar" type="button" id="janela-fechar" aria-label="Fechar">×</button>
+    </div>
+  </div>
+  <div class="tabela lista" id="janela-tabela"></div>
+  <button class="botao mais" type="button" id="janela-mais"></button>
+</dialog>
+<div class="dica dica-barras" id="dica-barras" hidden></div>
+<div id="impressao" hidden></div>
+
 <script src="vendor/d3.min.js"></script>
 <script src="vendor/plot.umd.min.js"></script>
+<script src="xlsx.js?v=dev"></script>
 <script src="app.js?v=dev"></script>
 </body>
 </html>

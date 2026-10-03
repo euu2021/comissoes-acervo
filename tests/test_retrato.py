@@ -19,16 +19,20 @@ class TestNomes(unittest.TestCase):
         self.assertEqual(pessoa("MESA DA CAMARA MUNICIPAL DE SAO PAULO - 01/01/2026 a 31/12/2026"),
                          ("Mesa Diretora", "Mesa Diretora"))
         self.assertEqual(pessoa("SECRETARIA MUNICIPAL DA FAZENDA"), ("Secretaria Municipal da Fazenda", "Outros"))
+        self.assertEqual(pessoa("SECRETARIA MUNICIPAL DA FAZENDA", "Remetente"),
+                         ("Secretaria Municipal da Fazenda", "Remetentes"))
+        self.assertEqual(pessoa("Comissão de Finanças e Orçamento", "Promovente"),
+                         ("Comissão de Finanças e Orçamento", "Institucional"))
 
 
 class TestMontar(unittest.TestCase):
 
     def test_materia(self):
         acervo = [{"comissao": "CCJ", "materia_id": "1", "rotulo": "PL 1/2026", "relator": "Ver. A B (PT)",
-                   "recebido_em": "2026-09-01T10:00:00", "interna_data": "", "interna_area": "",
+                   "enviado_por": "PROC-CMSP", "enviado_em": "2026-08-31T10:00:00", "recebido_em": "2026-09-01T10:00:00", "interna_data": "", "interna_area": "",
                    "interna_tipo": "", "ultima_interna": "02/09/2026 03:08 - Presidente da Comissão / Assinar"},
                   {"comissao": "FIN", "materia_id": "2", "rotulo": "DOCREC 5/2020", "relator": "",
-                   "recebido_em": "", "interna_data": "", "interna_area": "", "interna_tipo": "",
+                   "enviado_por": "SGP22", "enviado_em": "2021-02-24T19:13:00", "recebido_em": "", "interna_data": "", "interna_area": "", "interna_tipo": "",
                    "ultima_interna": ""}]
         materias = [{"materia_id": "1", "ementa": "Institui algo."}]
         autorias = [{"materia_id": "1", "ordem": "1", "autor": "Ver. A B (PT)"},

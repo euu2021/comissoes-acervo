@@ -29,16 +29,18 @@ def nome_proprio(texto: str) -> str:
     return " ".join(palavras)
 
 
-def pessoa(texto: str) -> tuple[str, str]:
-    """(nome, grupo) de um autor ou relator. O grupo é o partido, para vereadores;
-    os prefeitos se juntam em "Executivo" e as composições da Mesa em "Mesa Diretora"."""
+def pessoa(texto: str, classe: str = "") -> tuple[str, str]:
+    """(nome, grupo) de um autor ou relator. O grupo é o partido, para vereadores; os
+    prefeitos se juntam em "Executivo" e as composições da Mesa em "Mesa Diretora";
+    os demais promoventes são autoria institucional, e quem envia documentos, remetente."""
     if m := _RX_VEREADOR.match(texto):
         return nome_proprio(m[1]), m[2]
     if texto.startswith("Executivo"):
         return "Executivo", "Executivo"
     if texto.upper().startswith("MESA DA C"):
         return "Mesa Diretora", "Mesa Diretora"
-    return nome_proprio(texto), "Outros"
+    grupo = {"Promovente": "Institucional", "Remetente": "Remetentes"}.get(classe, "Outros")
+    return nome_proprio(texto), grupo
 
 
 def _dias(inicio: str, instante: datetime) -> int | None:
@@ -50,15 +52,15 @@ def _dias(inicio: str, instante: datetime) -> int | None:
 def montar(acervo: list[dict], materias: list[dict], autorias: list[dict], coleta: dict) -> dict:
     instante = datetime.fromisoformat(coleta["coletado_em"]).replace(tzinfo=None)
     ementas = {m["materia_id"]: m["ementa"] for m in materias}
-    autores_por_materia: dict[str, list[str]] = defaultdict(list)
+    autores_por_materia: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for a in sorted(autorias, key=lambda a: (a["materia_id"], int(a["ordem"] or 0))):
-        autores_por_materia[a["materia_id"]].append(a["autor"])
+        autores_por_materia[a["materia_id"]].append((a["autor"], a.get("classe", "")))
 
     pessoas: list[tuple[str, str]] = []
     indice: dict[tuple[str, str], int] = {}
 
-    def ref(texto: str) -> int:
-        chave = pessoa(texto)
+    def ref(texto: str, classe: str = "") -> int:
+        chave = pessoa(texto, classe)
         if chave not in indice:
             indice[chave] = len(pessoas)
             pessoas.append(chave)
@@ -71,7 +73,7 @@ def montar(acervo: list[dict], materias: list[dict], autorias: list[dict], colet
         data_passo = r["interna_data"]
         if not data_passo and (m := _RX_DATA_BR.match(r["ultima_interna"])):
             data_passo = f"{m[3]}-{m[2]}-{m[1]}T00:00:00"
-        autores = list(dict.fromkeys(ref(a) for a in autores_por_materia[r["materia_id"]]))
+        autores = list(dict.fromkeys(ref(a, classe) for a, classe in autores_por_materia[r["materia_id"]]))
         saida.append({
             "c": r["comissao"],
             "id": r["materia_id"],
@@ -79,8 +81,11 @@ def montar(acervo: list[dict], materias: list[dict], autorias: list[dict], colet
             "p": int(r["rotulo"].split()[0] in S.PROJETOS),
             "e": ementas.get(r["materia_id"], ""),
             "rel": ref(r["relator"]) if r["relator"] else None,
-            "rec": r["recebido_em"][:10],
+            "env": r["enviado_por"],
+            "envd": r["enviado_em"],
+            "rec": r["recebido_em"],
             "dc": _dias(r["recebido_em"], instante),
+            "pd": data_passo,
             "pt": r["interna_tipo"],
             "pa": r["interna_area"],
             "dp": _dias(data_passo, instante),

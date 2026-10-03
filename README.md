@@ -11,7 +11,7 @@ O SPLEGIS mostra só o retrato do momento. Este repositório tira um retrato por
 ## Como funciona
 
 - **Fonte:** o relatório público [Projetos em Análise nas Comissões](https://splegisconsulta.saopaulo.sp.leg.br/Relatorio/IndexComissaoProjetoTramitacaoInterna) do SPLEGIS. O coletor lê o endpoint JSON que alimenta a tabela do relatório, com todos os tipos de matéria.
-- **Quando:** um GitHub Action ([`.github/workflows/coleta.yml`](.github/workflows/coleta.yml)) roda todo dia às 21h47 (horário de Brasília) e faz commit dos dados em [`dados/`](dados/). Uma repescagem às 23h47 coleta só se a primeira execução tiver falhado. O agendamento do GitHub às vezes atrasa horas; por isso, coletas feitas até as 9h valem para o dia anterior, cujo fim elas retratam.
+- **Quando:** um GitHub Action ([`.github/workflows/coleta.yml`](.github/workflows/coleta.yml)) roda todo dia às 10h07, às 15h07 e às 21h47 (horário de Brasília) e faz commit dos dados em [`dados/`](dados/); cada coleta substitui a anterior do mesmo dia, e a da noite fecha o retrato. Uma repescagem às 23h47 coleta só se o dia ainda estiver sem coleta. O agendamento do GitHub às vezes atrasa horas; por isso, coletas feitas até as 9h valem para o dia anterior, cujo fim elas retratam.
 - **Idempotente:** coletar de novo para o mesmo dia substitui a coleta daquele dia.
 - **À prova de resposta truncada:** se alguma comissão falhar, nada é gravado. Se o acervo de uma comissão cair mais de 50% de um dia para o outro, a coleta também é barrada, porque isso indica resposta incompleta do SPLEGIS e seria registrado como uma saída em massa de matérias.
 - **Sem dependências:** só a biblioteca padrão do Python.
@@ -83,7 +83,7 @@ python -m painel                    # gera site/dados/ a partir de dados/
 python -m http.server -d site 8000  # abre o painel em http://localhost:8000
 ```
 
-O painel ([`site/`](site/)) tem duas visões: a **Evolução**, com as séries diárias desde 2018, e o **Retrato do dia**, com o acervo atual por relator, por passo da tramitação interna e por autor ou partido, e a lista das matérias de cada recorte, com links para o SPLEGIS. É publicado no GitHub Pages pelo workflow [`painel.yml`](.github/workflows/painel.yml), a cada push e depois de cada coleta. Ele junta a série reconstruída com a dos retratos reais, calculada com a mesma regra, e usa [Observable Plot](https://observablehq.com/plot/) e [D3](https://d3js.org/) (licença ISC, copiados em `site/vendor/`).
+O painel ([`site/`](site/)) tem duas visões. O **Retrato do dia** traz o acervo atual com os indicadores do relatório (acervo ativo, relatores, sem relator, mais de 180 e de 365 dias, mediana), as distribuições por relator e por estado da tramitação, a pesquisa por autor ou partido (com seleção múltipla e resultado próprio) e a lista das matérias de cada recorte, com links para o SPLEGIS e exportação em CSV, Excel e PDF, além do relatório consolidado em XLSX com uma aba por comissão. A **Evolução** traz as séries diárias desde 2018. É publicado no GitHub Pages pelo workflow [`painel.yml`](.github/workflows/painel.yml), a cada push e depois de cada coleta. Ele junta a série reconstruída com a dos retratos reais, calculada com a mesma regra, e usa [Observable Plot](https://observablehq.com/plot/) e [D3](https://d3js.org/) (licença ISC, copiados em `site/vendor/`).
 
 Se o SPLEGIS bloquear o acesso a partir do GitHub, o coletor respeita as variáveis de ambiente `HTTPS_PROXY`/`HTTP_PROXY`. Basta defini-las no workflow a partir de um secret.
 

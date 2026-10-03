@@ -29,6 +29,8 @@ class TestSerieReal(unittest.TestCase):
 
     def test_sem_relator_e_pendentes(self):
         self.assertEqual(self.linhas[("2026-10-02", "TODAS", "projetos")]["sem_relator"], "1")
+        self.assertEqual(self.linhas[("2026-10-02", "CCJ", "todas")]["relatores"], "1")
+        self.assertEqual(self.linhas[("2026-10-02", "FIN", "todas")]["relatores"], "0")
         self.assertEqual(self.linhas[("2026-10-03", "FIN", "todas")]["pendentes"], "1")
 
     def test_idade_conta_no_instante_da_coleta(self):
