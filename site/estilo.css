@@ -28,6 +28,7 @@
   --cinza-1: #898781;
   --cinza-2: #c3c2b7;
   --sombra: 0 4px 16px rgba(11, 11, 11, 0.10);
+  --aba-ativa: #1c5cab;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -58,6 +59,7 @@
     --cinza-1: #898781;
     --cinza-2: #52514e;
     --sombra: 0 4px 16px rgba(0, 0, 0, 0.5);
+    --aba-ativa: #256abf;
   }
 }
 
@@ -87,6 +89,7 @@
   --cinza-1: #898781;
   --cinza-2: #52514e;
   --sombra: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --aba-ativa: #256abf;
 }
 
 * { box-sizing: border-box; }
@@ -222,8 +225,8 @@ h1 { margin: 4px 0 8px; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; le
 .abas .aba-titulo { font-size: 20px; font-weight: 700; line-height: 1.2; }
 .abas .aba-sub { font-size: 12px; color: var(--tinta-3); }
 .abas button:hover { color: var(--tinta); background: var(--realce); }
-.abas button[aria-selected="true"] { color: var(--tinta); background: var(--superficie); border-color: var(--borda);
-  box-shadow: inset 0 3px 0 var(--s1); }
+.abas button[aria-selected="true"] { color: #fff; background: var(--aba-ativa); border-color: var(--aba-ativa); }
+.abas button[aria-selected="true"] .aba-sub { color: #fff; }
 @media (max-width: 600px) {
   .abas { width: 100%; }
   .abas button { flex: 1 1 0; padding: 10px 12px 9px; }
@@ -286,10 +289,8 @@ h1 { margin: 4px 0 8px; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; le
 
 /* topo, navegação e filtro de comissão */
 .topo-lado { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.botao.destaque { display: inline-flex; align-items: baseline; gap: 6px; background: var(--s1); color: #fff;
-  border-color: transparent; font-weight: 600; }
-.botao.destaque:hover { filter: brightness(1.08); background: var(--s1); }
-.botao.destaque small { font-weight: 400; opacity: 0.85; font-size: 12px; }
+.botao.relatorio { display: inline-flex; align-items: baseline; gap: 6px; font-weight: 600; }
+.botao.relatorio small { font-weight: 400; font-size: 12px; color: var(--tinta-3); }
 .link-externo { font-size: 14px; }
 .navegacao { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 8px 16px;
   border-bottom: 1px solid var(--borda); }
