@@ -4,4 +4,4 @@ __pycache__/
 .venv/
 .playwright-mcp/
 proxy.local.json
-experimentos/cache/
+reconstrucao/cache/

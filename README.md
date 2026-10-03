@@ -4,7 +4,7 @@ Série histórica do acervo das 7 Comissões Permanentes da Câmara Municipal de
 
 O SPLEGIS mostra só o retrato do momento. Este repositório tira um retrato por dia e guarda a evolução, para responder perguntas como "o acervo da CCJ está crescendo ou diminuindo?" ou "quanto tempo as matérias passaram sem relator ao longo do ano?".
 
-**Situação:** coleta diária automática desde 02/10/2026. O site no GitHub Pages ainda está em construção.
+**Situação:** coleta diária automática desde 02/10/2026, mais uma reconstrução do acervo de novembro de 2018 até essa data. O site no GitHub Pages ainda está em construção.
 
 ## Como funciona
 
@@ -60,6 +60,10 @@ O relatório traz todos os tipos de matéria: `PL`, `PDL`, `PR`, `PLO`, `DOCREC`
 - `autorias.csv`: `materia_id`, `ordem`, `autor_codigo`, `autor`, `classe` (`Vereador`, `Remetente` ou `Promovente`).
 - `coletas.csv`: `data`, `coletado_em` (com fuso), `comissao`, `materias` (tamanho do acervo naquela coleta).
 
+## Série reconstruída (nov/2018 a out/2026)
+
+Para que a série não precise de anos para ganhar profundidade, [`dados/reconstrucao/`](dados/reconstrucao/) traz o acervo de cada dia desde novembro de 2018. Ele foi reconstruído a partir dos eventos de tramitação que o SPLEGIS publica dia a dia e ancorado no primeiro retrato real. A reconstrução não tem relator, porque nenhuma fonte pública registra quem foi designado no passado, e marca com `?` o que não pôde ser recuperado. Método, arquivos e validação estão em [`dados/reconstrucao/README.md`](dados/reconstrucao/README.md).
+
 ## Rodar localmente
 
 Requer Python 3.10 ou mais recente.
@@ -69,6 +73,9 @@ python -m coletor.coletar              # coleta e grava em dados/
 python -m coletor.coletar --se-faltar  # só coleta se hoje ainda não tiver coleta
 python -m coletor.coletar --forcar     # ignora a trava contra queda brusca do acervo
 python -m unittest                     # testes
+
+python -m reconstrucao baixar --inicio 2018-10-26 --fim 2026-10-02  # feed de eventos (cache)
+python -m reconstrucao gerar                                        # refaz dados/reconstrucao/
 ```
 
 Se o SPLEGIS bloquear o acesso a partir do GitHub, o coletor respeita as variáveis de ambiente `HTTPS_PROXY`/`HTTP_PROXY`. Basta defini-las no workflow a partir de um secret.
