@@ -3,7 +3,7 @@
 import unittest
 from datetime import date
 
-from painel.etapas import calcular, conjunta, passos_por_materia
+from painel.etapas import calcular, conjunta, motivo_da_saida, passos_por_materia
 
 
 def rec(comissao, rotulo, data, area, passo, fonte="feed"):
@@ -28,6 +28,15 @@ class TestEtapas(unittest.TestCase):
         self.assertTrue(conjunta("Obs: passou em reunião conjunta."))
         self.assertFalse(conjunta("Motivo: Para reunião conjunta."))
         self.assertFalse(conjunta(""))
+
+    def test_motivo_da_saida(self):
+        self.assertEqual(motivo_da_saida("Motivo: Encerrado-TERMINO DE LEGISLATURA (ART. 275 REG. INT.).", True), "legislatura")
+        self.assertEqual(motivo_da_saida("", True), "votada")
+        self.assertEqual(motivo_da_saida("Motivo: Com parecer publicado.", False), "votada")
+        self.assertEqual(motivo_da_saida("Obs: aprovado em reunião conjunta.", False), "conjunta")
+        self.assertEqual(motivo_da_saida("Motivo: Encerrado-RETIRADO PELO AUTOR.", False), "retirada")
+        self.assertEqual(motivo_da_saida("Motivo: A pedido. Obs: Decurso de prazo - Art. 363 do RI.", False), "prazo")
+        self.assertEqual(motivo_da_saida("", False), "outros")
 
     def test_passos_juntam_reconstrucao_e_feed(self):
         ancora = "2026-10-03T06:53:36"

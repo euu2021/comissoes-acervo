@@ -383,6 +383,20 @@ h1 { margin: 4px 0 8px; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; le
 #painel-evolucao > .cartao { scroll-margin-top: 96px; }
 @media (max-width: 600px) { #painel-evolucao > .cartao { scroll-margin-top: 12px; } }
 
+/* ranking de relatores */
+.ranking { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 4px; }
+.ranking li { display: grid; grid-template-columns: minmax(150px, 30%) 1fr 5ch; align-items: center; gap: 12px; font-size: 14px; }
+.ranking .nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ranking .nome small { color: var(--tinta-3); font-size: 12px; }
+.ranking .trilho { height: 14px; min-width: 0; }
+.ranking .barra { display: block; height: 100%; background: var(--s1); border-radius: 0 4px 4px 0; min-width: 2px; }
+.ranking .valor { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ranking .vazio { display: block; }
+@media (max-width: 600px) {
+  .ranking li { grid-template-columns: 1fr auto; gap: 2px 8px; }
+  .ranking .trilho { grid-column: 1 / -1; grid-row: 2; }
+}
+
 /* calendário de movimentação */
 .ano-calendario { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--tinta-2); }
 .ano-calendario select { font: inherit; font-size: 13px; color: var(--tinta); background: var(--superficie);

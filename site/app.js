@@ -535,7 +535,7 @@ function renderMultiplos(j, i0, i1) {
   }
 }
 
-function renderEvolucao(j, serie, fluxos, tramitacao) {
+function renderEvolucao(j, serie, fluxos, tramitacao, legislativo) {
   const [i0, i1] = intervalo(j.datasObj);
   const datas = j.datasObj.slice(i0, i1);
   const fatia = (campo) => serie[campo].slice(i0, i1);
@@ -559,16 +559,31 @@ function renderEvolucao(j, serie, fluxos, tramitacao) {
   renderBase100(j, i0, i1);
   if (!(fluxos instanceof Error) && fluxos) renderComposicao(fluxos, j, i0, i1, { comissao: nomeComissao, grupo: nomeGrupo });
 
-  // Idade
+  // Idade: desde o recebimento ou desde o último passo interno
   const cIdade = document.getElementById("c-idade");
-  const camadasIdade = IDADE.map((k) => ({ ...k, valores: datas.map((_, i) => soma(serie, k.campos, i0 + i)) }))
+  const parados = cIdade.dataset.modo === "parado";
+  for (const b of cIdade.querySelectorAll(".alternador button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.modo === (parados ? "parado" : "idade")));
+    b.onclick = () => { cIdade.dataset.modo = b.dataset.modo; render(); };
+  }
+  cIdade.querySelector("h2").textContent = parados ? "Há quanto tempo estão sem movimentação" : "Há quanto tempo estão na comissão";
+  document.getElementById("sub-idade").textContent = parados
+    ? "Matérias do acervo pelos dias completos sem nenhum passo interno: desde o último passo ou, se ainda não houve nenhum, desde o recebimento. Mostra o que está parado, mesmo que tenha chegado há pouco."
+    : "Matérias do acervo por dias completos desde o recebimento pela comissão.";
+  const faixasIdade = parados
+    ? IDADE.map((k) => ({ ...k, nome: k.campos[0] === "idade_desconhecida" ? "Sem data conhecida" : k.nome,
+                          campos: k.campos.map((cp) => (cp === "idade_desconhecida" ? "parado_desconhecido"
+                                                       : cp.replace(/^idade_/, "parado_"))) }))
+    : IDADE;
+  const camadasIdade = faixasIdade.map((k) => ({ ...k, valores: datas.map((_, i) => soma(serie, k.campos, i0 + i)) }))
     .filter((k) => k.valores.some((v) => v));
   legenda(cIdade, camadasIdade);
-  acoes(cIdade, datas, camadasIdade, arquivo("idade"));
+  acoes(cIdade, datas, camadasIdade, arquivo(parados ? "sem-movimentacao" : "idade"));
   if (cIdade.dataset.tabela !== "1") {
     graficoEmpilhado(cIdade.querySelector(".grafico"), datas, camadasIdade, {
       altura: 300, inicioColeta: j.inicio_coleta,
-      descricao: `Idade das matérias ${nomeComissao}, empilhada por faixa. ` + resumo("Mais de 1 ano", datas, camadasIdade[0].valores) });
+      descricao: `${parados ? "Tempo sem movimentação" : "Idade"} das matérias ${nomeComissao}, empilhada por faixa. ` +
+        resumo("Mais de 1 ano", datas, camadasIdade[0].valores) });
   }
 
   // Mediana
@@ -629,6 +644,7 @@ function renderEvolucao(j, serie, fluxos, tramitacao) {
   renderFluxos(fluxos, { comissao: nomeComissao, grupo: nomeGrupo });
   renderSumario();
   renderTramitacao(tramitacao, { comissao: nomeComissao, grupo: nomeGrupo }, j.datasObj[j.datasObj.length - 1]);
+  renderLegislativo(legislativo, tramitacao, { comissao: nomeComissao, grupo: nomeGrupo }, j.datasObj[j.datasObj.length - 1]);
 }
 
 // ----------------------------------------------------------------------------- composição e base 100
@@ -841,9 +857,12 @@ function renderBase100(j, i0, i1) {
 // Áreas de origem e de destino, agrupadas. As cores seguem a ordem fixa da paleta.
 const AREAS = [
   { chave: "comissao", nome: "Outra comissão", curto: "", cor: "--s1" },
-  { chave: "sgp", nome: "Secretaria Geral Parlamentar", curto: "SGP", cor: "--s2" },
-  { chave: "arquivo", nome: "Arquivo", curto: "Arquivo", cor: "--s3" },
-  { chave: "procuradoria", nome: "Procuradoria", curto: "Procur.", cor: "--s4" },
+  { chave: "plenario", nome: "Plenário (SGP-21)", curto: "Plenário", cor: "--s2" },
+  { chave: "secretaria", nome: "Secretaria das Comissões (SGP-12)", curto: "Sec. Comissões", cor: "--s3" },
+  { chave: "controle", nome: "Controle do Processo Legislativo (SGP-22)", curto: "Controle", cor: "--s4" },
+  { chave: "sgp", nome: "Outras equipes da SGP", curto: "Outras SGP", cor: "--s5" },
+  { chave: "arquivo", nome: "Arquivo", curto: "Arquivo", cor: "--s6" },
+  { chave: "procuradoria", nome: "Procuradoria", curto: "Procur.", cor: "--s7" },
   { chave: "outros", nome: "Outras áreas ou desconhecida", curto: "Outras", cor: "--cinza-1" },
 ];
 const PERIODO_TEXTO = { tudo: "desde nov/2018", legislatura: "na legislatura atual (desde 2025)",
@@ -857,6 +876,9 @@ const MARCOS_DIAS = [[0, "chegada"], [7, "7 dias"], [15, "15 dias"], [30, "30 di
 function grupoDaArea(area) {
   if (area == null) return "outros";
   if (ORDEM_COMISSOES.includes(area)) return "comissao";
+  if (area === "SGP21") return "plenario";
+  if (area === "SGP12") return "secretaria";
+  if (area === "SGP22") return "controle";
   if (area.startsWith("SGP")) return "sgp";
   if (area === "ARQUIVO" || area === "TRAMITAÇÃO ENCERRADA") return "arquivo";
   if (area === "PROC-CMSP") return "procuradoria";
@@ -1289,8 +1311,24 @@ function graficoBarrasMes(alvo, faixas, camadas, opcoes) {
     }
   }
   const datas = [faixas[0].a, faixas[faixas.length - 1].b];
-  const maximo = d3.max(faixas, (x) => Math.max(x.total, x.media ?? 0)) || 1;
+  // Em `percentual`, cada barra vai a 100%: a altura é a parte de cada camada no total.
+  if (opcoes.percentual) {
+    for (const sg of segmentos) {
+      const t = sg.x.total || 1;
+      sg.y1 = (100 * sg.y1) / t;
+      sg.y2 = (100 * sg.y2) / t;
+    }
+  }
+  const maximo = opcoes.percentual ? 100 : d3.max(faixas, (x) => Math.max(x.total, x.media ?? 0)) || 1;
   const m = moldura(c, datas, largura, opcoes.altura, { yDomain: [0, maximo], marginRight: MARGEM_DIREITA });
+  if (opcoes.percentual) {
+    m.eixos[1] = Plot.axisY({ ticks: 5, tickSize: 0, tickPadding: 6, tickFormat: (v) => `${v}%`, fill: c.tinta3, label: null });
+  }
+  if (opcoes.anual) {  // um rótulo no meio de cada barra, com o ano
+    const cabe = (largura - 48 - MARGEM_DIREITA) / faixas.length > 34;
+    m.eixos[2] = Plot.axisX({ ticks: faixas.filter((_, i) => cabe || (faixas.length - 1 - i) % 2 === 0)
+      .map((x) => x.meio), tickFormat: (d) => String(d.getUTCFullYear()), tickSize: 0, tickPadding: 8, fill: c.tinta3, label: null });
+  }
   const vao = (largura - 48 - MARGEM_DIREITA) / faixas.length > 5 ? 1 : 0;
   const comMedia = faixas.filter((x) => x.media != null);
   const svg = Plot.plot({
@@ -1302,7 +1340,7 @@ function graficoBarrasMes(alvo, faixas, camadas, opcoes) {
         fillOpacity: (s) => (s.x.parcial ? 0.5 : 1), insetLeft: vao, insetRight: vao }),
       Plot.ruleY([0], { stroke: c.base }),
       Plot.line(comMedia, { x: "meio", y: "media", stroke: c.tinta, strokeWidth: 1.5, strokeLinejoin: "round" }),
-      ...marcos(datas, c, opcoes.inicioColeta, largura),
+      ...(opcoes.marcos === false ? [] : marcos(datas, c, opcoes.inicioColeta, largura)),
     ],
   });
   descrever(svg, opcoes.descricao);
@@ -1310,10 +1348,12 @@ function graficoBarrasMes(alvo, faixas, camadas, opcoes) {
   interagir(alvo, svg, faixas.map((x) => x.meio), (i) => {
     const x = faixas[i];
     return {
-      titulo: x.parcial ? `${rotuloMes(x.a)} (até ${dataBR(opcoes.ultimoDia)})` : rotuloMes(x.a),
+      titulo: opcoes.titulo ? opcoes.titulo(x) : x.parcial ? `${rotuloMes(x.a)} (até ${dataBR(opcoes.ultimoDia)})` : rotuloMes(x.a),
       linhas: [
-        ...camadas.map((k) => ({ cor: c.v(k.cor), quadrado: true, valor: fmt(x.valores[k.chave]), nome: k.nome })),
-        { total: true, valor: fmt(x.total), nome: "no mês" },
+        ...camadas.filter((k) => !opcoes.soPresentes || x.valores[k.chave]).map((k) => ({
+          cor: c.v(k.cor), quadrado: true, valor: fmt(x.valores[k.chave]),
+          nome: opcoes.mostrarParte && x.total ? `${k.nome} (${porcentoInteiro(x.valores[k.chave] / x.total)})` : k.nome })),
+        { total: true, valor: fmt(x.total), nome: opcoes.rotuloTotal ?? "no mês" },
         ...(x.media != null ? [{ total: true, valor: fmt(Math.round(x.media)), nome: "média dos 12 meses até aqui" }] : []),
       ],
     };
@@ -1497,6 +1537,215 @@ function renderCalendario(t, ultimoDia) {
   if (ano === anos[0]) caixa.parentElement.scrollLeft = caixa.parentElement.scrollWidth;
 }
 
+// ----------------------------------------------------------------------------- pareceres, relatores e desfechos
+/* Dados em dados/legislativo.json (painel/legislativo.py), tirados do webservice do SPLEGIS:
+   pareceres por mês e conclusão, pareceres por relator e desfecho dos projetos por ano. */
+const CONCLUSOES = [
+  { chave: "favoravel", nome: "Favorável", cor: "--s1" },
+  { chave: "legalidade", nome: "Pela legalidade", cor: "--s2" },
+  { chave: "ilegalidade", nome: "Pela ilegalidade", cor: "--s3" },
+  { chave: "contrario", nome: "Contrário", cor: "--s4" },
+  { chave: "outros", nome: "Outras conclusões", cor: "--cinza-1" },
+];
+const DESFECHOS = [
+  { chave: "lei", nome: "Virou lei", cor: "--s1" },
+  { chave: "vetado", nome: "Vetado", cor: "--s2" },
+  { chave: "rejeitado", nome: "Rejeitado ou ilegal", cor: "--s3" },
+  { chave: "retirado", nome: "Retirado pelo autor", cor: "--s4" },
+  { chave: "apensado", nome: "Apensado a outro", cor: "--s5" },
+  { chave: "legislatura", nome: "Arquivado no fim da legislatura", cor: "--s6" },
+  { chave: "outros", nome: "Outro encerramento", cor: "--cinza-1" },
+  { chave: "aberto", nome: "Sem encerramento registrado", cor: "--cinza-2" },
+];
+const SAIDAS = [
+  { chave: "votada", nome: "Votada na comissão", cor: "--s1" },
+  { chave: "conjunta", nome: "Aprovada em reunião conjunta", cor: "--s2" },
+  { chave: "retirada", nome: "Retirada pelo autor", cor: "--s3" },
+  { chave: "apensada", nome: "Apensada a outra", cor: "--s4" },
+  { chave: "prazo", nome: "Prazo vencido (art. 363)", cor: "--s5" },
+  { chave: "legislatura", nome: "Arquivada no fim da legislatura", cor: "--s6" },
+  { chave: "outros", nome: "Outros motivos", cor: "--cinza-1" },
+];
+const PRIMEIRAS_RELATORES = 15;
+
+async function carregarLegislativo() {
+  if (!cache.legislativo) {
+    const r = await fetch("dados/legislativo.json");
+    if (!r.ok) throw new Error(`não foi possível carregar dados/legislativo.json (${r.status})`);
+    cache.legislativo = await r.json();
+  }
+  return cache.legislativo;
+}
+
+// "RICARDO NUNES" -> "Ricardo Nunes"
+const nomeProprio = (t) => t.toLowerCase().split(" ").map((p, i) =>
+  (i && ["da", "das", "de", "do", "dos", "e"].includes(p) ? p : p.charAt(0).toUpperCase() + p.slice(1))).join(" ");
+
+// Meses de `meses` (AAAA-MM) que entram no período escolhido.
+function mesesDoPeriodo(meses) {
+  const ultimo = meses[meses.length - 1];
+  const desde = { tudo: meses[0], legislatura: "2025-01",
+                  "12m": dataISO(d3.utcMonth.offset(mesParaData(ultimo), -12)).slice(0, 7),
+                  "90d": dataISO(d3.utcMonth.offset(mesParaData(ultimo), -3)).slice(0, 7) }[estado.periodo];
+  return Math.max(0, meses.findIndex((mes) => mes >= desde));
+}
+
+function renderPareceres(l, nomes, ultimoDia) {
+  const cartao = document.getElementById("c-pareceres");
+  const serie = l.pareceres[estado.comissao];
+  const ultimoMes = l.meses[l.meses.length - 1];
+  const parcial = dataISO(ultimoDia) < dataISO(new Date(d3.utcMonth.offset(mesParaData(ultimoMes), 1) - DIA));
+  const i0 = mesesDoPeriodo(l.meses);
+  const faixas = l.meses.slice(i0).map((mes, k) => {
+    const i = i0 + k;
+    const a = mesParaData(mes);
+    const b = d3.utcMonth.offset(a, 1);
+    const valores = Object.fromEntries(CONCLUSOES.map((c) => [c.chave, serie[c.chave][i]]));
+    return { a, b, meio: new Date((+a + +b) / 2), parcial: parcial && i === l.meses.length - 1, valores,
+             total: d3.sum(CONCLUSOES, (c) => valores[c.chave]), media: null };
+  });
+  const onde = nomes.comissao.replace(/^da /, "na ").replace(/^das /, "nas ");
+  document.getElementById("sub-pareceres").textContent =
+    `Pareceres dados pelos relatores ${onde} em cada mês, pela conclusão. Na CCJ o parecer trata da legalidade; ` +
+    "nas demais comissões, do mérito." + (estado.grupo === "todas" ? " Só há pareceres de projetos." : "");
+  legenda(cartao, CONCLUSOES);
+  acoes(cartao, faixas.map((x) => x.a), CONCLUSOES.map((c) => ({ nome: c.nome, valores: faixas.map((x) => x.valores[c.chave]) })),
+        `pareceres-${estado.comissao.toLowerCase()}-${estado.periodo}.csv`);
+  if (cartao.dataset.tabela === "1") return;
+  const soma12 = d3.sum(faixas.filter((x) => !x.parcial).slice(-12), (x) => x.total);
+  graficoBarrasMes(cartao.querySelector(".grafico"), faixas, CONCLUSOES, {
+    altura: 260, inicioColeta: "2026-10-02", ultimoDia, mostrarParte: true,
+    descricao: `Pareceres ${onde} por mês e conclusão, ${PERIODO_TEXTO[estado.periodo]}. ${fmt(soma12)} nos últimos 12 meses completos.` });
+}
+
+function renderRelatores(l) {
+  const cartao = document.getElementById("c-relatores");
+  const porPartido = cartao.dataset.modo === "partido";
+  for (const b of cartao.querySelectorAll(".alternador button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.modo === (porPartido ? "partido" : "relator")));
+    b.onclick = () => { cartao.dataset.modo = b.dataset.modo; cartao.dataset.todos = ""; renderRelatores(l); };
+  }
+  const i0 = mesesDoPeriodo(l.meses);
+  const listas = estado.comissao === "TODAS" ? Object.values(l.pareceres_por_relator)
+    : [l.pareceres_por_relator[estado.comissao] ?? []];
+  const contagem = new Map();
+  for (const lista of listas) {
+    for (let k = 0; k < lista.length; k += 3) {
+      if (lista[k] < i0) continue;
+      const [nome, partido] = l.relatores[lista[k + 1]];
+      const chave = porPartido ? partido || "sem partido" : `${nome}|${partido}`;
+      contagem.set(chave, (contagem.get(chave) ?? 0) + lista[k + 2]);
+    }
+  }
+  const linhas = [...contagem].sort((a, b) => b[1] - a[1]);
+  const total = d3.sum(linhas, (x) => x[1]);
+  const onde = estado.comissao === "TODAS" ? "nas 7 comissões" : `na ${rotuloComissao(estado.comissao)}`;
+  document.getElementById("sub-relatores").textContent = porPartido
+    ? `Pareceres dados ${onde} ${PERIODO_TEXTO[estado.periodo]}, pelo partido do relator. O partido é o que o SPLEGIS registra hoje para o vereador, que pode não ser o da época.`
+    : `Pareceres dados ${onde} ${PERIODO_TEXTO[estado.periodo]}, por relator: ${fmt(total)} pareceres de ${fmt(linhas.length)} relatores.`;
+  const todos = cartao.dataset.todos === "1";
+  const mostrar = todos ? linhas : linhas.slice(0, PRIMEIRAS_RELATORES);
+  const maximo = linhas[0]?.[1] || 1;
+  const lista = cartao.querySelector(".ranking");
+  lista.replaceChildren(...mostrar.map(([chave, n]) => {
+    const li = el("li");
+    const [nome, partido] = porPartido ? [chave, ""] : chave.split("|");
+    const rotulo = el("span", "nome", porPartido ? nome : nomeProprio(nome));
+    if (partido) rotulo.append(" ", el("small", null, partido));
+    const trilho = el("span", "trilho");
+    const barra = el("span", "barra");
+    barra.style.width = `${(100 * n) / maximo}%`;
+    trilho.append(barra);
+    li.append(rotulo, trilho, el("span", "valor", fmt(n)));
+    li.title = `${porPartido ? nome : nomeProprio(nome)}: ${fmt(n)} pareceres (${porcento(n, total)})`;
+    return li;
+  }));
+  if (!linhas.length) lista.replaceChildren(el("li", "vazio", "Nenhum parecer neste recorte."));
+  const mais = cartao.querySelector(".botao.mais");
+  mais.hidden = linhas.length <= PRIMEIRAS_RELATORES;
+  mais.textContent = todos ? "Mostrar menos" : `Mostrar todos (${fmt(linhas.length)})`;
+  mais.onclick = () => { cartao.dataset.todos = todos ? "" : "1"; renderRelatores(l); };
+  const csv = cartao.querySelector(".acoes-csv");
+  const botao = el("button", "botao", "Baixar CSV");
+  botao.type = "button";
+  botao.addEventListener("click", () => baixarTabela(porPartido ? ["partido", "pareceres"] : ["relator", "partido", "pareceres"],
+    linhas.map(([chave, n]) => (porPartido ? [chave, n] : [...chave.split("|"), n])),
+    `${porPartido ? "partidos" : "relatores"}-${estado.comissao.toLowerCase()}-${estado.periodo}.csv`));
+  csv.replaceChildren(botao);
+}
+
+// Barras por ano, a partir de séries anuais (uma lista por categoria).
+function faixasAnuais(anos, series, categorias) {
+  return anos.map((ano, i) => {
+    const a = utc(`${ano}-01-01`);
+    const b = utc(`${ano + 1}-01-01`);
+    const valores = Object.fromEntries(categorias.map((k) => [k.chave, series[k.chave]?.[i] ?? 0]));
+    return { ano, a, b, meio: new Date((+a + +b) / 2), parcial: false, valores, media: null,
+             total: d3.sum(categorias, (k) => valores[k.chave]) };
+  });
+}
+
+function renderSaidas(t, nomes) {
+  const cartao = document.getElementById("c-saidas");
+  const serie = t.saidas[estado.grupo][estado.comissao];
+  const desde = { tudo: 0, legislatura: 2025, "12m": t.anos_saidas[t.anos_saidas.length - 1] - 1,
+                  "90d": t.anos_saidas[t.anos_saidas.length - 1] }[estado.periodo];
+  const anos = t.anos_saidas.filter((a) => a >= desde);
+  const sel = t.anos_saidas.map((a) => a >= desde);
+  const recorte = Object.fromEntries(SAIDAS.map((k) => [k.chave, serie[k.chave].filter((_, i) => sel[i])]));
+  const faixas = faixasAnuais(anos, recorte, SAIDAS);
+  const anoAtual = t.anos_saidas[t.anos_saidas.length - 1];
+  const onde = nomes.comissao.replace(/^da /, "da ").replace(/^das /, "das ");
+  document.getElementById("sub-saidas").textContent =
+    `${estado.grupo === "projetos" ? "Projetos" : "Matérias"} que saíram ${onde} em cada ano, pelo motivo da saída. ` +
+    "As barras de 2021 e 2025 incluem o arquivamento de fim de legislatura.";
+  legenda(cartao, SAIDAS);
+  acoesTabela(cartao, [{ nome: "ano" }, ...SAIDAS.map((k) => ({ nome: k.nome.toLowerCase() })), { nome: "total" }],
+              faixas.map((x) => [String(x.ano), ...SAIDAS.map((k) => x.valores[k.chave]), x.total]),
+              `saidas-${estado.comissao.toLowerCase()}-${estado.grupo}.csv`);
+  if (cartao.dataset.tabela === "1") return;
+  graficoBarrasMes(cartao.querySelector(".grafico"), faixas, SAIDAS, {
+    altura: 280, marcos: false, anual: true, mostrarParte: true, soPresentes: true, rotuloTotal: "no ano",
+    titulo: (x) => (x.ano === anoAtual ? `${x.ano} (até agora)` : String(x.ano)),
+    descricao: `Saídas ${onde} por ano e motivo. ` + faixas.map((x) => `${x.ano}: ${fmt(x.total)}`).join("; ") + "." });
+}
+
+function renderDesfechos(l) {
+  const cartao = document.getElementById("c-desfechos");
+  const series = { ...l.desfechos, aberto: l.em_tramitacao };
+  const indices = l.anos.map((_, i) => i).filter((i) => l.apresentados[i] != null);
+  const anos = indices.map((i) => l.anos[i]);
+  const recorte = Object.fromEntries(DESFECHOS.map((k) => [k.chave, indices.map((i) => series[k.chave][i])]));
+  const faixas = faixasAnuais(anos, recorte, DESFECHOS);
+  legenda(cartao, DESFECHOS);
+  acoesTabela(cartao, [{ nome: "ano de apresentação" }, { nome: "apresentados" }, ...DESFECHOS.map((k) => ({ nome: k.nome.toLowerCase() }))],
+              faixas.map((x, i) => [String(x.ano), l.apresentados[indices[i]], ...DESFECHOS.map((k) => x.valores[k.chave])]),
+              "desfecho-dos-projetos.csv");
+  if (cartao.dataset.tabela === "1") return;
+  const media = (ini, fim) => {
+    const sel = faixas.filter((x) => x.ano >= ini && x.ano <= fim);
+    return porcentoInteiro(d3.sum(sel, (x) => x.valores.lei) / (d3.sum(sel, (x) => x.total) || 1));
+  };
+  graficoBarrasMes(cartao.querySelector(".grafico"), faixas, DESFECHOS, {
+    altura: 300, marcos: false, anual: true, percentual: true, mostrarParte: true, rotuloTotal: "projetos apresentados",
+    titulo: (x) => `Projetos apresentados em ${x.ano}`,
+    descricao: `Desfecho dos projetos por ano de apresentação. Viraram lei ${media(2013, 2016)} dos apresentados de 2013 a 2016 e ` +
+      `${media(2017, 2020)} dos de 2017 a 2020.` });
+}
+
+function renderLegislativo(l, t, nomes, ultimoDia) {
+  const cartoes = ["c-pareceres", "c-relatores", "c-desfechos", "c-saidas"].map((id) => document.getElementById(id));
+  for (const cartao of cartoes) cartao.querySelector(".erro-fluxos")?.remove();
+  if (!(t instanceof Error) && t) renderSaidas(t, nomes);
+  if (l instanceof Error || !l) {
+    for (const cartao of cartoes.slice(0, 3)) cartao.append(el("p", "vazio erro-fluxos", `Erro ao carregar os dados: ${l?.message ?? ""}`));
+    return;
+  }
+  renderPareceres(l, nomes, ultimoDia);
+  renderRelatores(l);
+  renderDesfechos(l);
+}
+
 function renderTramitacao(t, nomes, ultimoDia) {
   const cartoes = ["c-producao", "c-tempos", "c-calendario"].map((id) => document.getElementById(id));
   for (const cartao of cartoes) cartao.querySelector(".erro-fluxos")?.remove();
@@ -1564,11 +1813,13 @@ async function render() {
   let j;
   let fluxos = null;
   let tramitacao = null;
+  let legislativo = null;
   try {
     j = await carregar(estado.grupo);
     if (estado.aba === "retrato") await carregarRetrato();
     else {  // sem estes arquivos, os outros gráficos ainda saem
-      [fluxos, tramitacao] = await Promise.all([carregarFluxos().catch((e) => e), carregarTramitacao().catch((e) => e)]);
+      [fluxos, tramitacao, legislativo] = await Promise.all([carregarFluxos().catch((e) => e),
+        carregarTramitacao().catch((e) => e), carregarLegislativo().catch((e) => e)]);
     }
   } catch (e) {
     conteudo.classList.remove("carregando");
@@ -1588,7 +1839,7 @@ async function render() {
   renderKpis(j, serie);
   mostrarAba();
   if (estado.aba === "retrato") renderRetrato();
-  else renderEvolucao(j, serie, fluxos, tramitacao);
+  else renderEvolucao(j, serie, fluxos, tramitacao, legislativo);
 }
 
 // ----------------------------------------------------------------------------- retrato do dia

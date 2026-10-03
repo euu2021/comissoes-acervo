@@ -46,6 +46,8 @@ Datas no formato ISO 8601 (`2019-03-14T10:42:00`), no horário de Brasília.
 | `passo_nenhum` | Matérias que ainda não tiveram passo interno na comissão. |
 | `passo_desconhecido` | Matérias cujo passo interno vigente é desconhecido. |
 | `etapa_sem_relator`, `etapa_estudo`, `etapa_diligencia`, `etapa_pauta`, `etapa_votado`, `etapa_outra` | As mesmas matérias (menos as de passo desconhecido) pela etapa da tramitação, deduzida do passo interno vigente: sem relator (ainda sem passo ou à espera da designação ou redesignação do relator), em estudo (com o relator ou na assessoria técnica), em diligência (à espera de informações, ofício ou audiência pública), na pauta (em condição de pauta, relatada, adiada ou com vista), votada (deliberada ou com parecer a publicar) ou outra. `etapa_sem_relator` é a estimativa de matérias sem relator: no retrato de 02/10/2026, deu 1.170, e o relatório apontava 1.156. |
+| `parado_ate30`, `parado_31a90`, `parado_91a180`, `parado_181a365`, `parado_mais365` | Matérias recebidas pelos dias completos sem movimentação interna: desde o último passo interno ou, se ainda não houve nenhum, desde o recebimento. |
+| `parado_desconhecido` | Matérias recebidas sem data de referência conhecida para esse cálculo. |
 
 `materias` é a soma de `pendentes` com as faixas de idade (incluída a desconhecida), e também a soma das colunas `passo_*`.
 

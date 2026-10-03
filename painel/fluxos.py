@@ -141,7 +141,7 @@ def fim_de_legislatura(motivo: str) -> bool:
 
 
 def montar(lista: list[dict], fim: str, inicio_coleta: str, atualizado_em: str,
-           autorias: dict[str, str] | None = None) -> dict:
+           autorias: dict[str, str] | None = None, nomes_areas: dict[str, str] | None = None) -> dict:
     """As passagens em colunas, para o painel. `autorias` dá a categoria de autoria de cada
     rótulo (ver composicao.py)."""
     autorias = autorias or {}
@@ -159,6 +159,7 @@ def montar(lista: list[dict], fim: str, inicio_coleta: str, atualizado_em: str,
         "atualizado_em": atualizado_em,
         "comissoes": ORDEM,
         "areas": areas,
+        "nomes_areas": {a: (nomes_areas or {}).get(a, "") for a in areas},
         "comissao": [ORDEM.index(p["comissao"]) for p in lista],
         "projeto": [int(p["rotulo"].split()[0] in PROJETOS) for p in lista],
         "desde": [dia(p["desde"]) for p in lista],

@@ -217,7 +217,20 @@
       </div>
       <ul class="legenda"></ul>
       <div class="grafico" tabindex="0"></div>
-      <p class="nota-grafico">A matéria entra no acervo quando é enviada à comissão e sai quando é enviada a outra área. A Secretaria Geral Parlamentar reúne as equipes da SGP (como SGP-12, SGP-21 e SGP-23), por onde as matérias seguem depois das comissões. O período em curso aparece mais claro, porque ainda não terminou.</p>
+      <p class="nota-grafico">A matéria entra no acervo quando é enviada à comissão e sai quando é enviada a outra área. As equipes da Secretaria Geral Parlamentar aparecem pelo nome: a de Apoio ao Plenário (SGP-21) recebe as matérias com pareceres prontos para votação em Plenário; a Secretaria das Comissões (SGP-12), as aprovadas em reunião conjunta; a de Controle do Processo Legislativo (SGP-22) devolve às comissões as desarquivadas. O período em curso aparece mais claro, porque ainda não terminou.</p>
+    </figure>
+
+    <figure class="cartao" id="c-saidas" data-curto="Por que saem">
+      <div class="cartao-topo">
+        <div>
+          <h2>Por que as matérias saem</h2>
+          <p class="sub" id="sub-saidas"></p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico">Votada: a passagem teve passo de votação ou saiu com parecer. Os motivos vêm do registro de cada envio no SPLEGIS; saídas sem motivo e sem votação, como as idas a outra área a pedido, ficam em "Outros motivos".</p>
     </figure>
 
     <figure class="cartao" id="c-base100" data-curto="Crescimento">
@@ -254,9 +267,14 @@
       <div class="cartao-topo">
         <div>
           <h2>Há quanto tempo estão na comissão</h2>
-          <p class="sub">Matérias do acervo por dias completos desde o recebimento pela comissão.</p>
+          <p class="sub" id="sub-idade"></p>
         </div>
-        <div class="acoes"></div>
+        <div class="controles">
+          <div class="alternador" role="group" aria-label="Contar">
+            <button type="button" data-modo="idade">Desde o recebimento</button><button type="button" data-modo="parado">Sem movimentação</button>
+          </div>
+          <div class="acoes"></div>
+        </div>
       </div>
       <ul class="legenda"></ul>
       <div class="grafico" tabindex="0"></div>
@@ -331,6 +349,36 @@
       <p class="nota-grafico">A votação conta pelo primeiro passo interno de matéria votada (deliberada, com certidão de votação ou parecer a publicar). As aprovadas em reunião conjunta de comissões não ganham esse passo; contam pela saída da comissão cujo motivo registra a aprovação conjunta. O mês em curso aparece mais claro.</p>
     </figure>
 
+    <figure class="cartao" id="c-pareceres" data-curto="Pareceres">
+      <div class="cartao-topo">
+        <div>
+          <h2>Pareceres por mês</h2>
+          <p class="sub" id="sub-pareceres"></p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico">Fonte: webservice do SPLEGIS, com o relator, a data e a conclusão de cada parecer dos projetos apresentados desde 2013. "Outras conclusões" reúne redação final, redação do vencido, pareceres sobre emendas e sobre vetos.</p>
+    </figure>
+
+    <figure class="cartao" id="c-relatores" data-curto="Relatores">
+      <div class="cartao-topo">
+        <div>
+          <h2>Quem relata</h2>
+          <p class="sub" id="sub-relatores"></p>
+        </div>
+        <div class="controles">
+          <div class="alternador" role="group" aria-label="Agrupar por">
+            <button type="button" data-modo="relator">Relatores</button><button type="button" data-modo="partido">Partidos</button>
+          </div>
+          <div class="acoes acoes-csv"></div>
+        </div>
+      </div>
+      <ol class="ranking"></ol>
+      <button class="botao mais" type="button"></button>
+    </figure>
+
     <figure class="cartao" id="c-calendario" data-curto="Calendário">
       <div class="cartao-topo">
         <div>
@@ -378,6 +426,19 @@
       <div class="matriz-caixa"></div>
       <p class="nota-grafico">Mostra as 7 comissões qualquer que seja o filtro, que só destaca a linha da escolhida. Passe o mouse sobre uma célula para ver o número de matérias.</p>
     </figure>
+
+    <figure class="cartao" id="c-desfechos" data-curto="Desfecho">
+      <div class="cartao-topo">
+        <div>
+          <h2>Como terminam os projetos</h2>
+          <p class="sub">Projetos (PL, PDL, PR e PLO) apresentados em cada ano, pelo desfecho registrado no SPLEGIS. Os filtros de comissão, de matérias e de período não se aplicam.</p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico">Virou lei inclui os projetos promulgados com veto parcial. "Sem encerramento registrado" reúne os que ainda tramitam e os que, nos anos mais antigos, não têm o encerramento registrado no SPLEGIS; por isso, os anos recentes têm muito mais projetos nessa faixa.</p>
+    </figure>
     </div>
   </main>
 
@@ -391,6 +452,7 @@
         <li><strong>Indicadores.</strong> A idade conta dias completos desde o recebimento pela comissão (ou desde a entrada no estado atual), nas faixas de até 30, 31 a 90, 91 a 180, 181 a 365 e mais de 365 dias. Matérias enviadas e ainda não recebidas fazem parte do acervo, como no relatório.</li>
         <li><strong>Etapas.</strong> O último passo interno de cada matéria indica em que etapa ela está: sem relator, em estudo, em diligência, na pauta ou votada. Antes da coleta diária, é assim que se estima quantas estavam sem relator.</li>
         <li><strong>Composição.</strong> A legislatura de apresentação sai do ano no número da matéria (o PL 502/2026 é da legislatura 2025–2028). A autoria é a do primeiro autor; os prefeitos são reconhecidos pelo código de autor no SPLEGIS, diferente do que a mesma pessoa tinha como vereador.</li>
+        <li><strong>Relatores e desfechos.</strong> O relator, o parecer e a conclusão de cada projeto em cada comissão, e como o projeto terminou (lei, veto, retirada, arquivamento), vêm do webservice do SPLEGIS, coletados uma vez por dia para os projetos dos últimos oito anos.</li>
         <li><strong>Votações e tempos.</strong> A votação de uma matéria numa comissão é o primeiro passo interno de matéria votada, ou a saída aprovada em reunião conjunta. O tempo de cada etapa vai de um passo ao primeiro passo da etapa seguinte. Desde o início da coleta diária, os passos internos também vêm do feed do SPLEGIS.</li>
         <li><strong>Entradas e saídas.</strong> Cada passagem de uma matéria por uma comissão vai do envio a ela até o envio para outra área, com a origem e o destino. Desde o início da coleta diária, a hora e o destino de cada saída vêm das tramitações que o SPLEGIS registra no dia.</li>
         <li><strong>Série histórica.</strong> Cada retrato fica guardado. O período de novembro de 2018 a outubro de 2026 foi reconstruído a partir dos eventos de tramitação que o SPLEGIS registra dia a dia e conferido contra o histórico oficial das matérias (<a href="https://github.com/prototiposlegisla/comissoes-acervo/blob/main/dados/reconstrucao/README.md">método e validação</a>).</li>

@@ -28,12 +28,18 @@ CATEGORIAS = ["passo_relator", "passo_presidente", "passo_secretaria", "passo_pr
 # desconhecido não entram em nenhuma: estão em passo_desconhecido.
 ETAPAS = ["etapa_sem_relator", "etapa_estudo", "etapa_diligencia", "etapa_pauta", "etapa_votado",
           "etapa_outra"]
+# Matérias recebidas pelo tempo sem movimentação interna: dias desde o último passo interno
+# (ou desde o recebimento, se ainda não houve passo). As não recebidas ficam em `pendentes`.
+FAIXAS_PARADO = [(30, "parado_ate30"), (90, "parado_31a90"), (180, "parado_91a180"),
+                 (365, "parado_181a365"), (None, "parado_mais365")]
 CAMPOS = (["data", "comissao", "grupo", "materias", "pendentes"]
-          + [f for _, f in FAIXAS] + ["idade_desconhecida", "mediana_dias"] + CATEGORIAS + ETAPAS)
+          + [f for _, f in FAIXAS] + ["idade_desconhecida", "mediana_dias"] + CATEGORIAS + ETAPAS
+          + [f for _, f in FAIXAS_PARADO] + ["parado_desconhecido"])
 
 # Uma matéria num dia: (comissão, é projeto?, faixa de idade, dias ou None, categoria do
-# passo interno, etapa ou None, sem relator? ou None quando não se sabe).
-Item = tuple[str, bool, str, "int | None", str, "str | None", "bool | None"]
+# passo interno, etapa ou None, sem relator? ou None quando não se sabe, faixa do tempo sem
+# movimentação ou None para as não recebidas).
+Item = tuple[str, bool, str, "int | None", str, "str | None", "bool | None", "str | None"]
 
 
 def categoria(area: str) -> str:
@@ -85,6 +91,19 @@ def etapa(area: str, passo: str) -> str | None:
     return "etapa_outra"
 
 
+def parado(referencias: list[datetime | None], instante: datetime) -> str:
+    """Faixa do tempo sem movimentação: desde a mais recente das referências (último passo
+    interno, recebimento) até o instante."""
+    conhecidas = [r for r in referencias if r is not None]
+    if not conhecidas:
+        return "parado_desconhecido"
+    dias = max(0, int((instante - max(conhecidas)).total_seconds() // 86400))
+    for limite, campo in FAIXAS_PARADO:
+        if limite is None or dias <= limite:
+            return campo
+    raise AssertionError("inalcançável")
+
+
 def idade(recebido: datetime | None, instante: datetime) -> tuple[str, int | None]:
     """(faixa, dias) de uma matéria recebida em `recebido` (None = ainda não recebida)."""
     if recebido is None or recebido > instante:
@@ -101,7 +120,7 @@ def agregar(data: str, itens: Iterable[Item], comissoes: list[str],
     """Uma linha por comissão (mais TODAS) × grupo ("todas" e "projetos")."""
     cont: dict[tuple, dict] = defaultdict(lambda: defaultdict(int))
     idades: dict[tuple, list] = defaultdict(list)
-    for comissao, projeto, faixa, dias, passo, fase, sem_relator in itens:
+    for comissao, projeto, faixa, dias, passo, fase, sem_relator, sem_mexer in itens:
         for chave in ((comissao, "todas"), (TODAS, "todas"), (comissao, "projetos"),
                       (TODAS, "projetos"))[: 4 if projeto else 2]:
             c = cont[chave]
@@ -110,6 +129,8 @@ def agregar(data: str, itens: Iterable[Item], comissoes: list[str],
             c[passo] += 1
             if fase:
                 c[fase] += 1
+            if sem_mexer:
+                c[sem_mexer] += 1
             c["sem_relator"] += bool(sem_relator)
             if dias is not None:
                 idades[chave].append(dias)
@@ -159,7 +180,12 @@ def calcular(presencas: list[Presenca], inicio: date, fim: date) -> list[dict]:
             vigente = p.passos[k] if k >= 0 else None
             passo = categoria(vigente.area) if vigente else "passo_desconhecido"
             fase = etapa(vigente.area, vigente.passo) if vigente else None
-            itens.append((p.comissao, projetos[i], faixa, dias, passo, fase, None))
+            sem_mexer = None
+            if faixa != "pendentes":
+                movimento = (datetime.fromisoformat(vigente.data) if vigente and vigente.area not in ("", DESCONHECIDO)
+                             and vigente.fonte not in ("chegada", "desconhecido") else None)
+                sem_mexer = parado([movimento, recebimentos[i]], instante)
+            itens.append((p.comissao, projetos[i], faixa, dias, passo, fase, None, sem_mexer))
         linhas += agregar(str(d), itens, comissoes)
         d += timedelta(days=1)
     return linhas

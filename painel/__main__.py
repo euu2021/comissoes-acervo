@@ -24,7 +24,7 @@ from datetime import datetime
 
 from coletor import config as C
 from coletor.util import ler_csv, log
-from painel import composicao, etapas, fluxos, retrato
+from painel import composicao, etapas, fluxos, legislativo, retrato
 from reconstrucao import serie as S
 
 SAIDA = C.RAIZ / "site" / "dados"
@@ -50,8 +50,12 @@ def serie_real(coletas: list[dict], historico: list[dict]) -> list[dict]:
             recebido = datetime.fromisoformat(h["recebido_em"]) if h["recebido_em"] else None
             faixa, dias = S.idade(recebido, instante)
             projeto = h["rotulo"].split()[0] in S.PROJETOS
+            sem_mexer = None
+            if faixa != "pendentes":
+                passo = h["interna_data"] or retrato.data_do_resumo(h.get("ultima_interna", ""))
+                sem_mexer = S.parado([datetime.fromisoformat(passo) if passo else None, recebido], instante)
             itens.append((h["comissao"], projeto, faixa, dias, S.categoria(h["interna_area"]),
-                          S.etapa(h["interna_area"], h["interna_tipo"]), not h["relator_codigo"]))
+                          S.etapa(h["interna_area"], h["interna_tipo"]), not h["relator_codigo"], sem_mexer))
             if h["relator_codigo"]:
                 for comissao in (h["comissao"], S.TODAS):
                     for grupo in ("todas", "projetos") if projeto else ("todas",):
@@ -106,7 +110,9 @@ def main() -> int:
                              coletas, ler_csv(C.ARQ_TRAMITACOES))
     autorias = composicao.autorias(ler_csv(C.DIR_DADOS / "reconstrucao" / "autorias.csv"), ler_csv(C.ARQ_AUTORIAS),
                                    ler_csv(C.ARQ_MATERIAS))
-    conteudo = fluxos.montar(lista, max(c["data"] for c in coletas), inicio_coleta, ultima["coletado_em"], autorias)
+    nomes_areas = {a["sigla"]: a["nome"] for a in ler_csv(C.DIR_DADOS / "areas.csv")}
+    conteudo = fluxos.montar(lista, max(c["data"] for c in coletas), inicio_coleta, ultima["coletado_em"], autorias,
+                             nomes_areas)
     arquivo = SAIDA / "fluxos.json"
     arquivo.write_text(json.dumps(conteudo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     log(f"{arquivo.name}: {len(lista)} passagens, {arquivo.stat().st_size / 1e6:.1f} MB")
@@ -118,6 +124,12 @@ def main() -> int:
     arquivo = SAIDA / "tramitacao.json"
     arquivo.write_text(json.dumps(conteudo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     log(f"{arquivo.name}: {len(conteudo['meses'])} meses, {arquivo.stat().st_size / 1e3:.0f} kB")
+
+    conteudo = legislativo.montar(ler_csv(C.DIR_DADOS / "relatorias.csv"), ler_csv(C.DIR_DADOS / "encerrados.csv"),
+                                  ler_csv(C.DIR_DADOS / "projetos_por_ano.csv"), max(c["data"] for c in coletas))
+    arquivo = SAIDA / "legislativo.json"
+    arquivo.write_text(json.dumps(conteudo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    log(f"{arquivo.name}: {len(conteudo['relatores'])} relatores, {arquivo.stat().st_size / 1e3:.0f} kB")
     return 0
 
 

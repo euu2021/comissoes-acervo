@@ -32,6 +32,10 @@ Todos os arquivos estão em UTF-8, separados por vírgula. As datas seguem o for
 | [`dados/coletas.csv`](dados/coletas.csv) | Data, hora e tamanho do acervo de cada comissão em cada coleta. |
 | [`dados/tramitacoes.csv`](dados/tramitacoes.csv) | Envios de e para as comissões registrados no feed do SPLEGIS desde o início da coleta diária, com o motivo. |
 | [`dados/passos_internos.csv`](dados/passos_internos.csv) | Passos da tramitação interna nas comissões registrados no feed desde o início da coleta diária. |
+| [`dados/relatorias.csv`](dados/relatorias.csv) | Relator, parecer e conclusão de cada projeto (PL, PDL, PR, PLO) apresentado desde 2013 em cada comissão permanente, por despacho. |
+| [`dados/encerrados.csv`](dados/encerrados.csv) | Como terminou cada projeto encerrado desde 2013: promulgado, vetado, retirado, arquivado etc. |
+| [`dados/projetos_por_ano.csv`](dados/projetos_por_ano.csv) | Quantos projetos de cada tipo foram apresentados por ano. |
+| [`dados/areas.csv`](dados/areas.csv) | Nome de cada área de tramitação do SPLEGIS (`SGP21` = Equipe de Apoio ao Plenário etc.). |
 
 ### `acervo.csv` e `historico.csv`
 
@@ -70,6 +74,15 @@ O relatório traz todos os tipos de matéria: `PL`, `PDL`, `PR`, `PLO`, `DOCREC`
 - `passos_internos.csv`: `data`, `rotulo`, `tipo` (`interna`, ou `excl_interna` quando o passo foi excluído), `comissao`, `area`, `passo` e `comentario`, como `Relator(a)` / `Estudo para manifestação do relator`. Só os passos nas 7 comissões.
 - Os dois arquivos só acrescentam: cada coleta baixa o feed do dia de referência e do anterior e junta o que faltava. `python -m coletor.tramitacoes --desde AAAA-MM-DD` preenche lacunas.
 
+### `relatorias.csv`, `encerrados.csv`, `projetos_por_ano.csv` e `areas.csv`
+
+Vêm do [webservice do SPLEGIS](https://splegisws.saopaulo.sp.leg.br/ws/ws2.asmx) (operações `ProjetosReunioesDeComissao`, `ProjetosEncerrados`, `ProjetosPorAno` e `AreasDeTramitacao`), por `python -m coletor.legislativo`, uma vez por dia, para os projetos dos últimos oito anos; `--desde 2013` refaz tudo.
+
+- `relatorias.csv`: `rotulo`, `comissao`, `despacho` (número do despacho que mandou o projeto às comissões) e `despachado_em`, `relator` e `partido` (o que o SPLEGIS registra hoje para o vereador, que pode não ser o da época), `parecer` (número/ano), `parecer_em` e `conclusao` (como `FAVORÁVEL`, `LEGALIDADE COM SUBSTITUTIVO`, `CONTRÁRIO`). Não traz a data da designação do relator.
+- `encerrados.csv`: `rotulo`, `tipo`, `ano`, `leitura`, `encerramento` e `motivo` (`Encerrado-PROMULGADO`, `Encerrado-VETO TOTAL ACEITO`, `Encerrado-TERMINO DE LEGISLATURA (ART. 275 REG. INT.)` etc.).
+- `projetos_por_ano.csv`: `ano`, `tipo`, `projetos`.
+- `areas.csv`: `sigla`, `nome`.
+
 ## Série reconstruída (nov/2018 a out/2026)
 
 Para que a série não precise de anos para ganhar profundidade, [`dados/reconstrucao/`](dados/reconstrucao/) traz o acervo de cada dia desde novembro de 2018. Ele foi reconstruído a partir dos eventos de tramitação que o SPLEGIS publica dia a dia e ancorado no primeiro retrato real. A reconstrução não tem relator, porque nenhuma fonte pública registra quem foi designado no passado, e marca com `?` o que não pôde ser recuperado. Método, arquivos e validação estão em [`dados/reconstrucao/README.md`](dados/reconstrucao/README.md).
@@ -83,6 +96,7 @@ python -m coletor.coletar              # coleta e grava em dados/
 python -m coletor.coletar --se-faltar  # só coleta se hoje ainda não tiver coleta
 python -m coletor.coletar --forcar     # ignora a trava contra queda brusca do acervo
 python -m coletor.tramitacoes          # envios do dia de referência e do anterior, do feed
+python -m coletor.legislativo          # relatorias, desfechos e contagens (últimos 8 anos)
 python -m unittest                     # testes
 
 python -m reconstrucao baixar --inicio 2018-10-26 --fim 2026-10-02  # feed de eventos (cache)
@@ -92,7 +106,7 @@ python -m painel                    # gera site/dados/ a partir de dados/
 python -m http.server -d site 8000  # abre o painel em http://localhost:8000
 ```
 
-O painel ([`site/`](site/)) tem duas visões. O **Retrato do dia** traz o acervo atual com os indicadores do relatório (acervo ativo, relatores, sem relator, mais de 180 e de 365 dias, mediana), as distribuições por relator e por estado da tramitação, a pesquisa por autor ou partido (com seleção múltipla e resultado próprio) e a lista das matérias de cada recorte, com links para o SPLEGIS e exportação em CSV, Excel e PDF, além do relatório consolidado em XLSX com uma aba por comissão. A **Evolução** traz as séries diárias desde 2018 (tamanho, idade, etapa da tramitação e área do passo interno do acervo, mais a estimativa de matérias sem relator, que só se conhece com exatidão a partir da coleta diária), o crescimento das comissões em base 100, a composição do acervo por legislatura de apresentação, tipo e autoria, as votações por mês, um calendário diário de votações e passos internos, a mediana do tempo de cada etapa por ano e, a partir das passagens de cada matéria por cada comissão, as entradas e saídas por mês com a origem e o destino, a curva de permanência (quanto tempo as matérias ficam na comissão, pelo estimador de Kaplan-Meier) e a matriz de rotas entre as comissões. É publicado no GitHub Pages pelo workflow [`painel.yml`](.github/workflows/painel.yml), a cada push e depois de cada coleta. Ele junta a série reconstruída com a dos retratos reais, calculada com a mesma regra (e as passagens da reconstrução com as dos retratos, completadas pelas tramitações), e usa [Observable Plot](https://observablehq.com/plot/) e [D3](https://d3js.org/) (licença ISC, copiados em `site/vendor/`).
+O painel ([`site/`](site/)) tem duas visões. O **Retrato do dia** traz o acervo atual com os indicadores do relatório (acervo ativo, relatores, sem relator, mais de 180 e de 365 dias, mediana), as distribuições por relator e por estado da tramitação, a pesquisa por autor ou partido (com seleção múltipla e resultado próprio) e a lista das matérias de cada recorte, com links para o SPLEGIS e exportação em CSV, Excel e PDF, além do relatório consolidado em XLSX com uma aba por comissão. A **Evolução** traz as séries diárias desde 2018 (tamanho, idade, etapa da tramitação e área do passo interno do acervo, mais a estimativa de matérias sem relator, que só se conhece com exatidão a partir da coleta diária), o crescimento das comissões em base 100, a composição do acervo por legislatura de apresentação, tipo e autoria, as votações e os pareceres por mês, quem relata, um calendário diário de votações e passos internos, a mediana do tempo de cada etapa por ano, por que as matérias saem de cada comissão, o tempo sem movimentação, como terminam os projetos e, a partir das passagens de cada matéria por cada comissão, as entradas e saídas por mês com a origem e o destino, a curva de permanência (quanto tempo as matérias ficam na comissão, pelo estimador de Kaplan-Meier) e a matriz de rotas entre as comissões. É publicado no GitHub Pages pelo workflow [`painel.yml`](.github/workflows/painel.yml), a cada push e depois de cada coleta. Ele junta a série reconstruída com a dos retratos reais, calculada com a mesma regra (e as passagens da reconstrução com as dos retratos, completadas pelas tramitações), e usa [Observable Plot](https://observablehq.com/plot/) e [D3](https://d3js.org/) (licença ISC, copiados em `site/vendor/`).
 
 Se o SPLEGIS bloquear o acesso a partir do GitHub, o coletor respeita as variáveis de ambiente `HTTPS_PROXY`/`HTTP_PROXY`. Basta defini-las no workflow a partir de um secret.
 

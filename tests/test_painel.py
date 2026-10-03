@@ -8,7 +8,8 @@ from painel.__main__ import colunas, serie_real
 def linha(comissao, rotulo, desde, ate="", recebido="2026-09-01T10:00:00", relator="", area="Relator(a)",
           passo="Estudo para manifestação do relator"):
     return {"comissao": comissao, "rotulo": rotulo, "desde": desde, "ate": ate,
-            "recebido_em": recebido, "relator_codigo": relator, "interna_area": area, "interna_tipo": passo}
+            "recebido_em": recebido, "relator_codigo": relator, "interna_area": area, "interna_tipo": passo,
+            "interna_data": "", "ultima_interna": ""}
 
 
 class TestSerieReal(unittest.TestCase):
@@ -33,6 +34,11 @@ class TestSerieReal(unittest.TestCase):
         self.assertEqual(self.linhas[("2026-10-02", "CCJ", "todas")]["relatores"], "1")
         self.assertEqual(self.linhas[("2026-10-02", "FIN", "todas")]["relatores"], "0")
         self.assertEqual(self.linhas[("2026-10-03", "FIN", "todas")]["pendentes"], "1")
+
+    def test_tempo_sem_movimentacao(self):
+        # Passo interno sem data: conta desde o recebimento (01/09), 31 dias completos.
+        self.assertEqual(self.linhas[("2026-10-02", "CCJ", "projetos")]["parado_31a90"], "1")
+        self.assertEqual(self.linhas[("2026-10-03", "FIN", "todas")]["parado_31a90"], "0")  # pendente
 
     def test_etapas(self):
         self.assertEqual(self.linhas[("2026-10-02", "CCJ", "todas")]["etapa_sem_relator"], "1")

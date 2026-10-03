@@ -43,6 +43,12 @@ def pessoa(texto: str, classe: str = "") -> tuple[str, str]:
     return nome_proprio(texto), grupo
 
 
+def data_do_resumo(resumo: str) -> str:
+    """Data do resumo da última tramitação interna ("02/09/2026 03:08 - ..."), em ISO; "" se não houver."""
+    m = _RX_DATA_BR.match(resumo or "")
+    return f"{m[3]}-{m[2]}-{m[1]}T00:00:00" if m else ""
+
+
 def _dias(inicio: str, instante: datetime) -> int | None:
     if not inicio:
         return None
@@ -70,9 +76,7 @@ def montar(acervo: list[dict], materias: list[dict], autorias: list[dict], colet
     for r in sorted(acervo, key=lambda r: (r["comissao"], int(r["materia_id"]))):
         # Sem tramitação interna em aberto, o SPLEGIS só mostra o resumo da última,
         # com a data no começo ("02/09/2026 03:08 - ..."): basta para contar os dias.
-        data_passo = r["interna_data"]
-        if not data_passo and (m := _RX_DATA_BR.match(r["ultima_interna"])):
-            data_passo = f"{m[3]}-{m[2]}-{m[1]}T00:00:00"
+        data_passo = r["interna_data"] or data_do_resumo(r["ultima_interna"])
         autores = list(dict.fromkeys(ref(a, classe) for a, classe in autores_por_materia[r["materia_id"]]))
         saida.append({
             "c": r["comissao"],

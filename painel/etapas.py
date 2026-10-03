@@ -11,6 +11,7 @@ passagens são as de fluxos.py.
   parecer a publicar). Matérias aprovadas em reunião conjunta de comissões não ganham esse
   passo; contam pela saída cujo motivo cita a reunião conjunta.
 - Calendário: passos internos lançados e votações em cada dia.
+- Saídas: por que cada passagem terminou, pelo ano da saída (ver `motivo_da_saida`).
 - Etapas: da chegada (recebimento) ao primeiro passo de trabalho com relator (estudo,
   diligência, pauta ou votação); daí ao primeiro passo de pauta (ou votação); e da pauta à
   votação. Cada tempo entra no ano em que a etapa terminou; etapas que não terminaram (a
@@ -42,6 +43,29 @@ def conjunta(motivo: str) -> bool:
     conjunta"), que ainda será votada."""
     texto = _texto(motivo or "")
     return "conjunt" in texto and "para reuniao conjunta" not in texto
+
+
+SAIDAS = ["votada", "conjunta", "retirada", "apensada", "prazo", "legislatura", "outros"]
+
+
+def motivo_da_saida(motivo: str, votou: bool) -> str:
+    """Por que a matéria saiu da comissão: arquivamento de fim de legislatura, votação (passo
+    de votação na passagem, ou saída "com parecer"/deliberação conclusiva), aprovação em
+    reunião conjunta, retirada pelo autor, apensamento, prazo vencido ou outro motivo."""
+    t = _texto(motivo or "")
+    if "termino de legislatura" in t:
+        return "legislatura"
+    if votou or "parecer" in t or "deliberacao pelas comissoes" in t:
+        return "votada"
+    if conjunta(motivo):
+        return "conjunta"
+    if "retirado pelo autor" in t:
+        return "retirada"
+    if "apensad" in t:
+        return "apensada"
+    if "decurso" in t or "363" in t:
+        return "prazo"
+    return "outros"
 
 
 def passos_por_materia(reconstruidos: list[dict], capturados: list[dict], ancora: str) -> dict:
@@ -92,6 +116,8 @@ def calcular(passagens: list[dict], passos: dict, fim: str) -> dict:
     contagem = defaultdict(lambda: {"votadas": [0] * len(meses), "conjunta": [0] * len(meses)})
     duracoes = defaultdict(list)  # (grupo, comissao, estagio, ano) -> dias
     calendario = defaultdict(lambda: {"passos": defaultdict(int), "votos": defaultdict(int)})
+    anos_saidas = list(range(2019, int(fim[:4]) + 1))
+    saidas = defaultdict(lambda: {k: [0] * len(anos_saidas) for k in SAIDAS})
 
     def dia(t: str) -> int:
         return (date.fromisoformat(t[:10]) - INICIO).days
@@ -117,6 +143,10 @@ def calcular(passagens: list[dict], passos: dict, fim: str) -> dict:
             for k in chaves:
                 contagem[k]["conjunta"][pos_mes[p["ate"][:7]]] += 1
                 calendario[k]["votos"][dia(p["ate"])] += 1
+        if p["ate"] and int(p["ate"][:4]) in anos_saidas:
+            categoria = motivo_da_saida(p.get("motivo", ""), voto is not None)
+            for k in chaves:
+                saidas[k][categoria][anos_saidas.index(int(p["ate"][:4]))] += 1
 
         if not p["desde"] or p["desde"] < "2018-11-01":
             continue
@@ -159,4 +189,6 @@ def calcular(passagens: list[dict], passos: dict, fim: str) -> dict:
                     serie["n"].append(len(v))
                 tempos[g][c][estagio] = serie
     return {"meses": meses, "anos": anos, "producao": producao, "tempos": tempos,
-            "calendario": {"inicio": INICIO.isoformat(), **dias}}
+            "calendario": {"inicio": INICIO.isoformat(), **dias},
+            "anos_saidas": anos_saidas,
+            "saidas": {g: {c: saidas[(g, c)] for c in comissoes} for g in ("projetos", "todas")}}
