@@ -11,7 +11,10 @@ partir do que coletor/legislativo.py guarda do webservice do SPLEGIS:
 - assuntos: os assuntos dos projetos que chegaram a cada comissão, por mês, sem os termos
   genéricos do vocabulário (criação, alteração, prazo...);
 - desfechos: como terminaram os projetos apresentados em cada ano (lei, veto, rejeição,
-  retirada, apensamento, arquivamento no fim da legislatura) e quantos seguem em tramitação.
+  retirada, apensamento, arquivamento no fim da legislatura) e quantos seguem em tramitação,
+  também pela autoria e pelo partido do primeiro autor;
+- prazos: quanto tempo cada comissão levou para dar o parecer, por ano e por autoria;
+- membros: quantos membros de cada partido cada comissão tinha, mês a mês.
 """
 from __future__ import annotations
 
@@ -20,7 +23,9 @@ import unicodedata
 from bisect import bisect_right
 from collections import defaultdict
 from datetime import date
+from statistics import quantiles
 
+from painel import composicao
 from reconstrucao.serie import TODAS
 
 CONCLUSOES = ["favoravel", "legalidade", "ilegalidade", "contrario", "outros"]
@@ -38,6 +43,9 @@ RELATORIO TREINAMENTO RESPONSABILIDADE BENEFICIO VENDA AQUISICAO ENCAMINHAMENTO 
 SEGURANCA GRATUIDADE ISENCAO EMPRESA PLACA IMOVEL RECURSOS_FINANCEIROS CURSOS COMUNICACAO PUBLICIDADE CONSTRUCAO
 SERVIDOR HOMENAGEM""".replace("_", " ").split()) | {"SETOR PRIVADO", "POLITICAS PUBLICAS", "SOCIEDADE CIVIL",
     "ORGAOS PUBLICOS", "ORGAOS MUNICIPAIS", "PRESTACAO DE SERVICO", "RECURSOS FINANCEIROS"}
+AUTORIAS = ["Vereadores", "Executivo", "Mesa Diretora", "Outros"]
+TODAS_AUTORIAS = "Todas"
+MINIMO_PRAZOS = 10  # pareceres para a mediana de um ano entrar no gráfico
 _RX_NORMA = re.compile(r"^(LEI|DECRETO|EMENDA|RESOLUCAO|PORTARIA)\b")
 
 
@@ -86,9 +94,110 @@ def assunto_util(termo: str) -> bool:
     return bool(termo) and termo not in GENERICOS and not _RX_NORMA.match(termo)
 
 
+def autoria_dos_projetos(autores: list[dict], filiacoes: dict[str, list[tuple]]) -> dict[str, tuple[str, str]]:
+    """{rótulo: (autoria, partido do primeiro autor na leitura)}; o partido só para vereadores."""
+    executivo = set(composicao.EXECUTIVO)
+    primeiro: dict[str, dict] = {}
+    for a in autores:
+        if a["rotulo"] not in primeiro or int(a["ordem"]) < int(primeiro[a["rotulo"]]["ordem"]):
+            primeiro[a["rotulo"]] = a
+    saida = {}
+    for rotulo, a in primeiro.items():
+        classe = composicao.classe(a["autor"], a["autor_codigo"], executivo)
+        classe = classe if classe in AUTORIAS else "Outros"
+        data = a["leitura"] or f"{rotulo.rsplit('/', 1)[1]}-07-01"
+        partido = partido_na_data(filiacoes, a["autor"], data) or "sem partido" if classe == "Vereadores" else ""
+        saida[rotulo] = (classe, partido)
+    return saida
+
+
+def _quartis(v: list[int]) -> tuple:
+    if len(v) < MINIMO_PRAZOS:
+        return None, None, None
+    q = quantiles(v, n=4, method="inclusive")
+    return round(q[0]), round(q[1]), round(q[2])
+
+
+def prazos(relatorias: list[dict], autoria: dict[str, tuple[str, str]], anos: list[int]) -> dict:
+    """Dias até o parecer, pelo ano do parecer. O prazo de cada comissão conta do despacho ou,
+    se outra comissão do mesmo despacho deu parecer antes, do último desses pareceres: as
+    comissões opinam uma depois da outra. Só conta o primeiro despacho de cada projeto: os
+    seguintes são em geral da segunda discussão, com parecer no mesmo dia, em reunião
+    conjunta. Ficam de fora também redação final, emendas e vetos."""
+    primeiro: dict[str, int] = {}
+    for r in relatorias:
+        if r["despacho"].isdigit():
+            primeiro[r["rotulo"]] = min(primeiro.get(r["rotulo"], 10**6), int(r["despacho"]))
+    por_despacho: dict[tuple, list[dict]] = defaultdict(list)
+    for r in relatorias:
+        if (r["parecer_em"] and r["despachado_em"] and conclusao(r["conclusao"]) != "outros"
+                and r["despacho"].isdigit() and int(r["despacho"]) == primeiro[r["rotulo"]]):
+            por_despacho[(r["rotulo"], r["despacho"])].append(r)
+    duracoes: dict[tuple, list[int]] = defaultdict(list)
+    for lista in por_despacho.values():
+        datas = sorted({r["parecer_em"][:10] for r in lista})
+        for r in lista:
+            dia = r["parecer_em"][:10]
+            antes = [d for d in datas if d < dia]
+            inicio = max([r["despachado_em"][:10], *antes])
+            dias = (date.fromisoformat(dia) - date.fromisoformat(inicio)).days
+            ano = int(dia[:4])
+            if dias < 0 or ano not in anos:
+                continue
+            classe = autoria.get(r["rotulo"], ("Outros", ""))[0]
+            for c in (r["comissao"], TODAS):
+                for a in (classe, TODAS_AUTORIAS):
+                    duracoes[(c, a, ano)].append(dias)
+    series: dict[str, dict] = {}
+    for c in sorted({c for c, _, _ in duracoes}):
+        series[c] = {}
+        for a in [TODAS_AUTORIAS, *AUTORIAS]:
+            s = {"mediana": [], "p25": [], "p75": [], "n": []}
+            for ano in anos:
+                v = duracoes.get((c, a, ano), [])
+                p25, med, p75 = _quartis(v)
+                s["p25"].append(p25)
+                s["mediana"].append(med)
+                s["p75"].append(p75)
+                s["n"].append(len(v))
+            series[c][a] = s
+    return series
+
+
+def membros(cargos: list[dict], filiacoes: dict[str, list[tuple]], fim: str) -> dict:
+    """Membros de cada comissão por partido, no dia 15 de cada mês desde 2013 (no último mês,
+    no último dia de dados). Quem ocupa mais de um cargo na mesma comissão conta uma vez."""
+    meses, m = [], date(PRIMEIRO_ANO, 1, 1)
+    while m.isoformat()[:7] <= fim[:7]:
+        meses.append(m.isoformat()[:7])
+        m = date(m.year + m.month // 12, m.month % 12 + 1, 1)
+    por_comissao: dict[str, list[dict]] = defaultdict(list)
+    for c in cargos:
+        if not c["fim"] or c["fim"] >= f"{PRIMEIRO_ANO}-01-01":
+            por_comissao[c["comissao"]].append(c)
+    contagem: dict[str, dict[tuple, int]] = defaultdict(lambda: defaultdict(int))
+    partidos: dict[str, int] = defaultdict(int)  # cadeiras × mês desde nov/2018, para ordenar
+    for i, mes in enumerate(meses):
+        dia = min(f"{mes}-15", fim[:10])
+        for comissao, lista in por_comissao.items():
+            presentes = {c["vereador"] for c in lista if c["inicio"][:10] <= dia and (not c["fim"] or c["fim"][:10] >= dia)}
+            for v in presentes:
+                p = partido_na_data(filiacoes, v, dia) or "sem partido"
+                contagem[comissao][(i, p)] += 1
+                contagem[TODAS][(i, p)] += 1
+                if mes >= "2018-11":
+                    partidos[p] += 1
+    ordem = sorted({p for d in contagem.values() for _, p in d}, key=lambda p: (-partidos[p], p))
+    idx = {p: k for k, p in enumerate(ordem)}
+    return {"meses": meses, "partidos": ordem,
+            # por comissão: [mês, partido, membros, ...]
+            "por_comissao": {c: [v for (i, p), n in sorted(d.items(), key=lambda x: (x[0][0], idx[x[0][1]]))
+                                 for v in (i, idx[p], n)] for c, d in contagem.items()}}
+
+
 def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict], fim: str,
            filiacoes: list[dict] = (), cargos: list[dict] = (), assuntos: list[dict] = (),
-           passagens: list[dict] = ()) -> dict:
+           passagens: list[dict] = (), autores: list[dict] = ()) -> dict:
     meses = []
     m = date(2018, 11, 1)
     while m.isoformat()[:7] <= fim[:7]:
@@ -129,6 +238,21 @@ def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict],
         if ano in anos:
             desfechos[desfecho(e["motivo"])][anos.index(ano)] += 1
     encerrados_ano = [sum(desfechos[k][i] for k in DESFECHOS) for i in range(len(anos))]
+
+    # Desfecho pela autoria e pelo partido do primeiro autor (só projetos com autor conhecido).
+    autoria = autoria_dos_projetos(autores, por_vereador)
+    motivo = {e["rotulo"]: e["motivo"] for e in encerrados}
+    vazio = lambda: {k: [0] * len(anos) for k in [*DESFECHOS, "aberto"]}  # noqa: E731
+    por_autoria = {a: vazio() for a in AUTORIAS}
+    por_partido: dict[str, dict] = defaultdict(vazio)
+    for rotulo, (classe, partido) in autoria.items():
+        ano = int(rotulo.rsplit("/", 1)[1])
+        if ano not in anos:
+            continue
+        k = desfecho(motivo[rotulo]) if rotulo in motivo else "aberto"
+        por_autoria[classe][k][anos.index(ano)] += 1
+        if partido:
+            por_partido[partido][k][anos.index(ano)] += 1
 
     hoje = fim[:10]
     atual = {v: partido_na_data(por_vereador, v, hoje) for v in relatores}
@@ -181,4 +305,9 @@ def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict],
         "desfechos": desfechos,
         "em_tramitacao": [None if apresentados.get(a) is None else max(0, apresentados[a] - encerrados_ano[i])
                           for i, a in enumerate(anos)],
+        # por autoria e por partido do primeiro autor: {desfecho ou "aberto": [projetos por ano]}
+        "desfechos_autoria": por_autoria,
+        "desfechos_partido": dict(sorted(por_partido.items())),
+        "prazos": prazos(relatorias, autoria, anos),
+        "membros": membros(cargos, por_vereador, fim),
     }

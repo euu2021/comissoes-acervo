@@ -38,6 +38,7 @@ Todos os arquivos estão em UTF-8, separados por vírgula. As datas seguem o for
 | [`dados/eventos.csv`](dados/eventos.csv) | Eventos marcados nos gráficos de tempo (como a pandemia): `data`, `texto` curto do marco e `descricao`. Editado à mão. |
 | [`dados/areas.csv`](dados/areas.csv) | Nome de cada área de tramitação do SPLEGIS (`SGP21` = Equipe de Apoio ao Plenário etc.). |
 | [`dados/assuntos.csv`](dados/assuntos.csv) | Assuntos de cada projeto apresentado desde 2013, no vocabulário que a Câmara usa para indexar os projetos. |
+| [`dados/autores.csv`](dados/autores.csv) | Autores de cada projeto apresentado desde 2013, na ordem, com a data de leitura. Dá a autoria (vereadores, Executivo, Mesa) e o partido do primeiro autor. |
 | [`dados/filiacoes.csv`](dados/filiacoes.csv) | Partidos de cada vereador, com as datas de filiação. Dá o partido do relator na data do parecer. |
 | [`dados/cargos_comissoes.csv`](dados/cargos_comissoes.csv) | Presidentes, vices e membros das 7 comissões permanentes, com as datas. |
 
@@ -78,15 +79,16 @@ O relatório traz todos os tipos de matéria: `PL`, `PDL`, `PR`, `PLO`, `DOCREC`
 - `passos_internos.csv`: `data`, `rotulo`, `tipo` (`interna`, ou `excl_interna` quando o passo foi excluído), `comissao`, `area`, `passo` e `comentario`, como `Relator(a)` / `Estudo para manifestação do relator`. Só os passos nas 7 comissões.
 - Os dois arquivos só acrescentam: cada coleta baixa o feed do dia de referência e do anterior e junta o que faltava. `python -m coletor.tramitacoes --desde AAAA-MM-DD` preenche lacunas.
 
-### `relatorias.csv`, `encerrados.csv`, `projetos_por_ano.csv`, `areas.csv`, `assuntos.csv`, `filiacoes.csv` e `cargos_comissoes.csv`
+### `relatorias.csv`, `encerrados.csv`, `projetos_por_ano.csv`, `areas.csv`, `assuntos.csv`, `autores.csv`, `filiacoes.csv` e `cargos_comissoes.csv`
 
-Vêm do [webservice do SPLEGIS](https://splegisws.saopaulo.sp.leg.br/ws/ws2.asmx) (operações `ProjetosReunioesDeComissao`, `ProjetosEncerrados`, `ProjetosPorAno`, `AreasDeTramitacao`, `ProjetosAssuntos` e `VereadoresCMSP`), por `python -m coletor.legislativo`, uma vez por dia, para os projetos dos últimos oito anos; `--desde 2013` refaz tudo.
+Vêm do [webservice do SPLEGIS](https://splegisws.saopaulo.sp.leg.br/ws/ws2.asmx) (operações `ProjetosReunioesDeComissao`, `ProjetosEncerrados`, `ProjetosPorAno`, `AreasDeTramitacao`, `ProjetosAssuntos`, `ProjetosAutores` e `VereadoresCMSP`), por `python -m coletor.legislativo`, uma vez por dia, para os projetos dos últimos oito anos; `--desde 2013` refaz tudo.
 
 - `relatorias.csv`: `rotulo`, `comissao`, `despacho` (número do despacho que mandou o projeto às comissões) e `despachado_em`, `relator` e `partido` (o que o SPLEGIS registra hoje para o vereador, que pode não ser o da época; o painel usa o da data do parecer, por `filiacoes.csv`), `parecer` (número/ano), `parecer_em` e `conclusao` (como `FAVORÁVEL`, `LEGALIDADE COM SUBSTITUTIVO`, `CONTRÁRIO`). Não traz a data da designação do relator.
 - `encerrados.csv`: `rotulo`, `tipo`, `ano`, `leitura`, `encerramento` e `motivo` (`Encerrado-PROMULGADO`, `Encerrado-VETO TOTAL ACEITO`, `Encerrado-TERMINO DE LEGISLATURA (ART. 275 REG. INT.)` etc.).
 - `projetos_por_ano.csv`: `ano`, `tipo`, `projetos`.
 - `areas.csv`: `sigla`, `nome`.
 - `assuntos.csv`: `rotulo` e `assuntos`, separados por ` | ` (como `DENOMINACAO | LOGRADOURO PUBLICO`). O painel deixa de fora os termos que descrevem a ação do projeto (criação, alteração, prazo...) e as referências a normas.
+- `autores.csv`: `rotulo`, `leitura`, `ordem` (1 = primeiro autor), `autor_codigo` e `autor`. Os prefeitos são reconhecidos pelo código de autor, como na composição do acervo.
 - `filiacoes.csv`: `vereador`, `partido`, `inicio`, `fim`. Inclui os vereadores de legislaturas anteriores.
 - `cargos_comissoes.csv`: `comissao`, `cargo` (`Presidente`, `Vice-presidente`, `Membro`...), `vereador`, `inicio`, `fim`. As comissões extraordinárias ficam de fora.
 

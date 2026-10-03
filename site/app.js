@@ -869,11 +869,12 @@ function estiloComissao(c, destaque) {
 // Linhas das comissões e de "Todas", com um ponto e o nome no fim de cada uma; nomes que se
 // encostariam são afastados na vertical. px e py dão a posição de um ponto {x, y} na tela;
 // texto(p), o rótulo do fim da linha (o nome da comissão, se omitido).
-function marcasComissoes(c, curvas, destaque, pontosDe, px, py, texto = (p) => rotuloComissao(p.sigla)) {
-  const estilo = estiloComissao(c, destaque);
+function marcasComissoes(c, curvas, destaque, pontosDe, px, py, texto = (p) => rotuloComissao(p.sigla),
+                         estilo = estiloComissao(c, destaque)) {
   const peso = (sigla) => (sigla === destaque ? 3 : sigla === "TODAS" ? 2 : destaque === "TODAS" ? 1 : 0);
   const ordem = [...curvas].sort((a, b) => peso(a.sigla) - peso(b.sigla));
-  const fins = ordem.map((cv) => ({ ...pontosDe(cv).pop(), sigla: cv.sigla })).filter((p) => p.y != null);
+  // pontosDe pode trazer pontos com y nulo, que interrompem a linha; o rótulo fica no último com valor.
+  const fins = ordem.map((cv) => ({ ...pontosDe(cv).filter((p) => p.y != null).pop(), sigla: cv.sigla })).filter((p) => p.y != null);
   const postos = [];
   for (const r of [...fins].sort((a, b) => py(a) - py(b))) {
     let y = py(r);
@@ -897,15 +898,28 @@ function marcasComissoes(c, curvas, destaque, pontosDe, px, py, texto = (p) => r
 }
 
 // Dica com o valor de cada comissão num ponto: a escolhida primeiro, as outras do maior ao menor.
-// detalhe(cv), se dado, vai depois do nome.
-function linhasDaDica(c, curvas, destaque, valor, formato, detalhe = () => "") {
-  const estilo = estiloComissao(c, destaque);
-  const nome = (s) => (s === "TODAS" ? "todas as comissões" : rotuloComissao(s));
+// detalhe(cv), se dado, vai depois do nome. `estilo` e `nome` servem para curvas que não são comissões.
+function linhasDaDica(c, curvas, destaque, valor, formato, detalhe = () => "",
+                      { estilo = estiloComissao(c, destaque), nome = (s) => (s === "TODAS" ? "todas as comissões" : rotuloComissao(s)) } = {}) {
   const presentes = curvas.filter((cv) => valor(cv) != null);
   const escolhida = presentes.find((cv) => cv.sigla === destaque);
   const outras = presentes.filter((cv) => cv !== escolhida).sort((a, b) => valor(b) - valor(a));
   return [...(escolhida ? [escolhida] : []), ...outras]
     .map((cv) => ({ cor: estilo(cv.sigla).cor, valor: formato(valor(cv)), nome: `${nome(cv.sigla)} ${detalhe(cv)}`.trim() }));
+}
+
+// Curvas por autoria (vereadores, Executivo, Mesa), com as mesmas cores da composição do acervo.
+const COR_AUTORIA = { Vereadores: "--s1", Executivo: "--s2", "Mesa Diretora": "--s3" };
+const AUTORIAS_CURVAS = ["Vereadores", "Executivo", "Mesa Diretora"];
+const TODAS_AUTORIAS = "Todas";
+const nomeAutoria = (a) => a;  // "Todas" curto, para caber no fim da linha; a legenda diz "Todas as autorias"
+function estiloAutoria(c) {
+  return (a) => (a === TODAS_AUTORIAS ? { cor: c.tinta, largura: 2, opacidade: 1, traco: "5 3" }
+    : { cor: c.v(COR_AUTORIA[a] ?? "--cinza-1"), largura: 2.25, opacidade: 1, traco: null });
+}
+function legendaAutorias(cartao) {
+  legenda(cartao, [...AUTORIAS_CURVAS.map((a) => ({ nome: a, cor: COR_AUTORIA[a], linha: true })),
+                   { nome: "Todas as autorias", cor: "--tinta", tracejada: true }]);
 }
 
 function legendaComissoes(cartao) {
@@ -1221,17 +1235,21 @@ function permanencia(duracoes, saiu, maxDia) {
   return { s, ultimo, mediana: mediana === -1 ? null : mediana };
 }
 
-function curvasDePermanencia(f) {
+// Uma curva por comissão (e Todas) ou, com `porAutoria`, uma por autoria na comissão escolhida.
+function curvasDePermanencia(f, porAutoria = false) {
   const [inicio, fim] = janelaFluxos(f);
   const maxDia = Math.min(3 * 365, fim - inicio);
-  const grupos = new Map([["TODAS", { d: [], e: [] }], ...f.comissoes.map((s) => [s, { d: [], e: [] }])]);
-  for (const i of passagensDoRecorte(f, true)) {
+  const chaves = porAutoria ? [TODAS_AUTORIAS, ...AUTORIAS_CURVAS] : ["TODAS", ...f.comissoes];
+  const grupos = new Map(chaves.map((s) => [s, { d: [], e: [] }]));
+  for (const i of passagensDoRecorte(f, !porAutoria)) {
     const de = f.desde[i];
     if (de == null || de < inicio || de > fim) continue;
     const ate = f.ate[i];
     const saiu = ate != null && !arquivamentoDeLegislatura(f, i);
     const dur = (ate ?? fim) - de;
-    for (const g of [grupos.get("TODAS"), grupos.get(f.comissoes[f.comissao[i]])]) {
+    const proprio = porAutoria ? grupos.get(f.autorias[f.autoria[i]]) : grupos.get(f.comissoes[f.comissao[i]]);
+    for (const g of [grupos.get(chaves[0]), proprio]) {
+      if (!g) continue;
       g.d.push(dur);
       g.e.push(saiu);
     }
@@ -1256,8 +1274,10 @@ function graficoPermanencia(alvo, curvas, opcoes) {
   const pontosDe = (cv) => Array.from({ length: cv.ultimo + 1 }, (_, t) => ({ x: t, y: cv.s[t] }));
   const ticks = [];
   for (const [t] of MARCOS_DIAS) if (t <= ate && (!ticks.length || px({ x: t }) - px({ x: ticks[ticks.length - 1] }) >= 64)) ticks.push(t);
-  const med = destaque.mediana;
-  const corDestaque = estiloComissao(c, opcoes.destaque)(opcoes.destaque).cor;
+  const estilo = opcoes.estilo ?? estiloComissao(c, opcoes.destaque);
+  const nome = opcoes.nome ?? rotuloComissao;
+  const med = opcoes.semMediana ? null : destaque.mediana;
+  const corDestaque = estilo(opcoes.destaque).cor;
   const svg = Plot.plot({
     width: largura, height: opcoes.altura, ...margens,
     style: { fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontSize: "12px",
@@ -1272,13 +1292,13 @@ function graficoPermanencia(alvo, curvas, opcoes) {
                    fill: c.tinta3, label: null }),
       Plot.ruleY([0], { stroke: c.base }),
       Plot.ruleY([0.5], { stroke: c.tinta3, strokeDasharray: "3 3", strokeOpacity: 0.8 }),
-      ...marcasComissoes(c, curvas, opcoes.destaque, pontosDe, px, py),
+      ...marcasComissoes(c, curvas, opcoes.destaque, pontosDe, px, py, (p) => nome(p.sigla), estilo),
       ...(med != null ? [
         Plot.dot([{ t: med, v: 0.5 }], { x: "t", y: "v", r: 4.5, fill: corDestaque, stroke: c.superficie, strokeWidth: 2 }),
         Plot.text([{ t: med, v: 0.5 }], { x: "t", y: "v", dy: -12, fill: c.tinta, fontWeight: 600,
           // perto do fim do eixo, o texto vai para a esquerda do ponto
           ...(med > ate * 0.6 ? { dx: -8, textAnchor: "end" } : { dx: 8, textAnchor: "start" }),
-          text: () => `${rotuloComissao(opcoes.destaque)}: metade saiu em ${rotuloDias(med)}`,
+          text: () => `${nome(opcoes.destaque)}: metade saiu em ${rotuloDias(med)}`,
           stroke: c.superficie, strokeWidth: 3, paintOrder: "stroke" }),
       ] : []),
     ],
@@ -1287,28 +1307,42 @@ function graficoPermanencia(alvo, curvas, opcoes) {
   alvo.replaceChildren(svg);
   interagir(alvo, svg, d3.range(0, ate + 1), (t) => ({
     titulo: t === 0 ? "Ainda na comissão no dia da chegada" : `Ainda na comissão depois de ${rotuloDias(t)}`,
-    linhas: linhasDaDica(c, curvas, opcoes.destaque, (cv) => (t <= cv.ultimo ? cv.s[t] : null), porcentoInteiro),
+    linhas: linhasDaDica(c, curvas, opcoes.destaque, (cv) => (t <= cv.ultimo ? cv.s[t] : null), porcentoInteiro,
+                         () => "", { estilo, nome: opcoes.nome }),
   }));
 }
 
 function renderPermanencia(f, nomes) {
   const cartao = document.getElementById("c-permanencia");
-  const curvas = curvasDePermanencia(f);
-  const destaque = curvas.find((cv) => cv.sigla === estado.comissao);
-  document.getElementById("sub-permanencia").textContent =
-    `Das passagens que começaram ${textoPeriodo()}, quantas ainda estavam na comissão depois de cada tempo. ` +
-    "A linha tracejada marca a metade: onde a curva a cruza está o tempo mediano.";
-  legendaComissoes(cartao);
+  const porAutoria = cartao.dataset.modo === "autoria";
+  for (const b of cartao.querySelectorAll(".alternador button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.modo === (porAutoria ? "autoria" : "comissao")));
+    b.onclick = () => { cartao.dataset.modo = b.dataset.modo; render(); };
+  }
+  const curvas = curvasDePermanencia(f, porAutoria).filter((cv) => !porAutoria || cv.ultimo >= 1);
+  const chaveDestaque = porAutoria ? TODAS_AUTORIAS : estado.comissao;
+  const destaque = curvas.find((cv) => cv.sigla === chaveDestaque);
+  const onde = nomes.comissao.replace(/^da /, "na ").replace(/^das /, "nas ");
+  const medianas = curvas.filter((cv) => cv.sigla !== TODAS_AUTORIAS)
+    .map((cv) => `${cv.mediana != null ? rotuloDias(cv.mediana) : `mais de ${rotuloDias(cv.ultimo)}`} (${cv.sigla})`);
+  document.getElementById("sub-permanencia").textContent = porAutoria
+    ? `Das passagens que começaram ${textoPeriodo()} ${onde}, quantas ainda estavam lá depois de cada tempo, pelo ` +
+      `primeiro autor da matéria. Metade saiu em ${medianas.join(", ").replace(/, ([^,]*)$/, " e $1")}.`
+    : `Das passagens que começaram ${textoPeriodo()}, quantas ainda estavam na comissão depois de cada tempo. ` +
+      "A linha tracejada marca a metade: onde a curva a cruza está o tempo mediano.";
+  if (porAutoria) legendaAutorias(cartao);
+  else legendaComissoes(cartao);
   const ate = d3.max(curvas, (cv) => cv.ultimo);
   const dias = MARCOS_DIAS.map(([t]) => t).filter((t) => t > 0 && t <= ate);
-  const nome = (s) => (s === "TODAS" ? "todas" : s === "SAUDE" ? "SAÚDE" : s);
+  const nome = (s) => (porAutoria ? nomeAutoria(s).toLowerCase() : s === "TODAS" ? "todas" : s === "SAUDE" ? "SAÚDE" : s);
   const colunas = [{ nome: "depois de" }, ...curvas.map((cv) => ({ nome: `${nome(cv.sigla)} (%)` }))];
   const linhas = [
     ...dias.map((t) => [rotuloDias(t), ...curvas.map((cv) => (t <= cv.ultimo ? Math.round(cv.s[t] * 1000) / 10 : null))]),
     ["mediana (dias)", ...curvas.map((cv) => cv.mediana)],
     ["passagens", ...curvas.map((cv) => cv.n)],
   ];
-  acoesTabela(cartao, colunas, linhas, `permanencia-${estado.grupo}-${estado.periodo}.csv`, { recentesPrimeiro: false });
+  acoesTabela(cartao, colunas, linhas, `permanencia-${porAutoria ? `autoria-${estado.comissao.toLowerCase()}-` : ""}` +
+              `${estado.grupo}-${estado.periodo}.csv`, { recentesPrimeiro: false });
   const grafico = cartao.querySelector(".grafico");
   if (cartao.dataset.tabela === "1") return;
   if (!destaque || destaque.ultimo < 1) {
@@ -1316,8 +1350,9 @@ function renderPermanencia(f, nomes) {
     return;
   }
   graficoPermanencia(grafico, curvas, {
-    altura: 300, destaque: estado.comissao,
-    descricao: `Permanência na comissão ${nomes.comissao}: ` + (destaque.mediana != null
+    altura: 300, destaque: chaveDestaque,
+    ...(porAutoria ? { estilo: estiloAutoria(cores()), nome: nomeAutoria, semMediana: true } : {}),
+    descricao: `Permanência na comissão ${nomes.comissao}${porAutoria ? ", por autoria" : ""}: ` + (destaque.mediana != null
       ? `metade das passagens saiu em ${rotuloDias(destaque.mediana)}.`
       : `mais da metade ainda estava lá depois de ${rotuloDias(destaque.ultimo)}.`) });
 }
@@ -1940,8 +1975,227 @@ function renderSaidas(t, nomes) {
     descricao: `Saídas ${onde} por ano e motivo. ` + faixas.map((x) => `${x.ano}: ${fmt(x.total)}`).join("; ") + "." });
 }
 
+// Gráfico anual com uma linha por comissão (ou por autoria, com `estilo` e `nome`), como o do
+// crescimento comparado: a escolhida em destaque e o valor no fim de cada linha.
+function graficoAnual(alvo, datas, curvas, opcoes) {
+  const c = cores();
+  const largura = alvo.clientWidth;
+  const estilo = opcoes.estilo ?? estiloComissao(c, opcoes.destaque);
+  const nome = opcoes.nome ?? rotuloComissao;
+  const maximo = d3.max(curvas, (cv) => d3.max(cv.valores)) || 1;
+  const m = moldura(c, datas, largura, opcoes.altura, { yDomain: [0, maximo], marginRight: MARGEM_DIREITA + 24 });
+  const topo = d3.scaleLinear().domain([0, maximo]).nice().domain()[1];
+  const [d0, d1] = [datas[0], datas[datas.length - 1]];
+  const px = (p) => ((p.x - d0) / (d1 - d0)) * (largura - 48 - MARGEM_DIREITA - 24);
+  const py = (p) => (1 - p.y / topo) * (opcoes.altura - 22 - 26);
+  const pontosDe = (cv) => datas.map((d, i) => ({ x: d, y: cv.valores[i] }));  // y nulo interrompe a linha
+  const svg = Plot.plot({
+    ...m.opcoes,
+    marks: [
+      ...m.eixos,
+      ...curvas.map((cv) => {
+        const e = estilo(cv.sigla);
+        return Plot.dot(pontosDe(cv).filter((p) => p.y != null), { x: "x", y: "y", r: 2.5, fill: e.cor, fillOpacity: e.opacidade });
+      }),
+      ...marcasComissoes(c, curvas, opcoes.destaque, pontosDe, px, py, (p) => `${nome(p.sigla)} ${fmt(p.y)}`, estilo),
+    ],
+  });
+  descrever(svg, opcoes.descricao);
+  alvo.replaceChildren(svg);
+  interagir(alvo, svg, datas, (i) => ({
+    titulo: opcoes.titulo?.(i),
+    linhas: linhasDaDica(c, curvas, opcoes.destaque, (cv) => cv.valores[i], opcoes.formato ?? fmt,
+                         (cv) => opcoes.detalhe?.(cv, i) ?? "", { estilo, nome: (s) => nome(s) }),
+  }));
+}
+
+const diasTexto = (v) => (v == null ? "—" : `${fmt(v)} ${v === 1 ? "dia" : "dias"}`);
+
+function renderPrazos(l) {
+  const cartao = document.getElementById("c-prazos");
+  const porAutoria = cartao.dataset.modo === "autoria";
+  for (const b of cartao.querySelectorAll(".alternador button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.modo === (porAutoria ? "autoria" : "comissao")));
+    b.onclick = () => { cartao.dataset.modo = b.dataset.modo; render(); };
+  }
+  const anoAtual = l.anos[l.anos.length - 1];
+  const k0 = l.anos.indexOf(PRIMEIRO_ANO_PRAZOS);
+  const anos = l.anos.slice(k0);
+  const datas = anos.map((a) => utc(`${a}-01-01`));
+  const serie = (s, a) => l.prazos[s]?.[a] ?? { mediana: [], p25: [], p75: [], n: [] };
+  const fatia = (x) => anos.map((_, i) => ({ mediana: x.mediana[k0 + i], p25: x.p25[k0 + i], p75: x.p75[k0 + i], n: x.n[k0 + i] }));
+  const curvas = porAutoria
+    ? [TODAS_AUTORIAS, ...AUTORIAS_CURVAS].map((a) => ({ sigla: a, pontos: fatia(serie(estado.comissao, a)) }))
+    : COMISSOES.map(([sigla]) => ({ sigla, pontos: fatia(serie(sigla, TODAS_AUTORIAS)) }));
+  for (const cv of curvas) cv.valores = cv.pontos.map((x) => x.mediana);
+  const visiveis = curvas.filter((cv) => cv.valores.some((v) => v != null));
+  const onde = estado.comissao === "TODAS" ? "nas 7 comissões" : `na ${rotuloComissao(estado.comissao)}`;
+  document.getElementById("sub-prazos").textContent = porAutoria
+    ? `Mediana, em dias, do tempo até o parecer ${onde}, pelo primeiro autor do projeto e pelo ano do parecer.`
+    : "Mediana, em dias, do tempo que cada comissão levou para dar o parecer, pelo ano do parecer.";
+  if (porAutoria) legendaAutorias(cartao);
+  else legendaComissoes(cartao);
+  const nome = porAutoria ? nomeAutoria : rotuloComissao;
+  const colunas = [{ nome: "ano" }, ...visiveis.flatMap((cv) => [
+    { nome: `${nome(cv.sigla)}: mediana (dias)` }, { nome: `${nome(cv.sigla)}: 1º quartil` },
+    { nome: `${nome(cv.sigla)}: 3º quartil` }, { nome: `${nome(cv.sigla)}: pareceres` }])];
+  acoesTabela(cartao, colunas, anos.map((a, i) => [String(a), ...visiveis.flatMap((cv) =>
+    [cv.pontos[i].mediana, cv.pontos[i].p25, cv.pontos[i].p75, cv.pontos[i].n])]),
+    `prazo-do-parecer-${porAutoria ? `autoria-${estado.comissao.toLowerCase()}` : "comissoes"}.csv`);
+  if (cartao.dataset.tabela === "1") return;
+  const destaque = porAutoria ? TODAS_AUTORIAS : estado.comissao;
+  const final = visiveis.find((cv) => cv.sigla === destaque) ?? visiveis[0];
+  graficoAnual(cartao.querySelector(".grafico"), datas, visiveis, {
+    altura: 300, destaque, formato: diasTexto,
+    ...(porAutoria ? { estilo: estiloAutoria(cores()), nome: nomeAutoria } : {}),
+    titulo: (i) => (anos[i] === anoAtual ? `Pareceres de ${anoAtual} (até agora)` : `Pareceres de ${anos[i]}`),
+    detalhe: (cv, i) => {
+      const x = cv.pontos[i];
+      return x.mediana == null ? "" : `— metade entre ${fmt(x.p25)} e ${fmt(x.p75)}; ${fmt(x.n)} pareceres`;
+    },
+    descricao: `Mediana do tempo até o parecer${porAutoria ? ` ${onde}, por autoria` : ", por comissão"}. ` +
+      `${nome(final.sigla)}: ${final.valores.map((v, i) => `${anos[i]} ${v ?? "—"}`).join(", ")}.` });
+}
+
+// Membros das comissões por partido, mês a mês. As cores ficam com os 7 partidos que mais
+// ocuparam cadeiras desde nov/2018 (a ordem vem pronta do painel/legislativo.py).
+const PARTIDOS_COM_COR = 7;
+
+function renderMembros(l, ultimoDia) {
+  const cartao = document.getElementById("c-membros");
+  const mb = l.membros;
+  const camadas = [...mb.partidos.slice(0, PARTIDOS_COM_COR).map((p, k) => ({ chave: p, nome: p, cor: `--s${k + 1}` })),
+                   { chave: "outros", nome: "Outros partidos", cor: "--cinza-1" }];
+  const cadeiras = mb.meses.map(() => ({}));
+  const lista = mb.por_comissao[estado.comissao] ?? [];
+  for (let k = 0; k < lista.length; k += 3) {
+    const p = mb.partidos[lista[k + 1]];
+    const chave = lista[k + 1] < PARTIDOS_COM_COR ? p : "outros";
+    cadeiras[lista[k]][chave] = (cadeiras[lista[k]][chave] ?? 0) + lista[k + 2];
+    if (chave === "outros") (cadeiras[lista[k]].quais ??= []).push(`${p} ${lista[k + 2]}`);
+  }
+  const ultimoMes = mb.meses[mb.meses.length - 1];
+  const parcial = dataISO(ultimoDia) < dataISO(new Date(d3.utcMonth.offset(mesParaData(ultimoMes), 1) - DIA));
+  const [i0, i1] = mesesDoPeriodo(mb.meses);
+  const faixas = mb.meses.slice(i0, i1).map((mes, k) => {
+    const i = i0 + k;
+    const a = mesParaData(mes);
+    const b = d3.utcMonth.offset(a, 1);
+    const valores = Object.fromEntries(camadas.map((x) => [x.chave, cadeiras[i][x.chave] ?? 0]));
+    return { a, b, meio: new Date((+a + +b) / 2), parcial: false, valores, media: null, quais: cadeiras[i].quais ?? [],
+             total: d3.sum(camadas, (x) => valores[x.chave]) };
+  });
+  const uma = estado.comissao !== "TODAS";
+  document.getElementById("sub-membros").textContent = uma
+    ? `Membros da ${rotuloComissao(estado.comissao)} por partido, no dia 15 de cada mês, ${textoPeriodo()}.`
+    : `Cadeiras nas 7 comissões por partido, no dia 15 de cada mês, ${textoPeriodo()}. Um vereador em duas comissões ocupa duas cadeiras.`;
+  legenda(cartao, camadas);
+  acoesTabela(cartao, [{ nome: "mês" }, ...camadas.map((x) => ({ nome: x.nome })), { nome: "total" }, { nome: "outros partidos" }],
+              faixas.map((x) => [dataISO(x.a).slice(0, 7), ...camadas.map((k) => x.valores[k.chave]), x.total, x.quais.join("; ")]),
+              `membros-${estado.comissao.toLowerCase()}.csv`);
+  if (cartao.dataset.tabela === "1") return;
+  const ultima = faixas[faixas.length - 1];
+  graficoBarrasMes(cartao.querySelector(".grafico"), faixas, camadas, {
+    altura: 280, inicioColeta: "2026-10-02", ultimoDia, soPresentes: true, rotuloTotal: uma ? "membros" : "cadeiras",
+    titulo: (x) => `${rotuloMes(x.a)}${x === ultima && parcial ? ` (em ${dataBR(ultimoDia)})` : ""}` +
+      (x.quais.length ? ` · outros: ${x.quais.join(", ")}` : ""),
+    descricao: `${uma ? "Membros" : "Cadeiras"} por partido. No último mês: ` +
+      camadas.filter((k) => ultima.valores[k.chave]).map((k) => `${k.nome} ${ultima.valores[k.chave]}`).join(", ") + "." });
+}
+
+// Desfecho por grupo (autoria ou partido do primeiro autor): uma barra de 100% por grupo.
+function graficoBarrasGrupos(alvo, linhas, camadas, opcoes) {
+  const c = cores();
+  const largura = alvo.clientWidth;
+  MEDIR_MARCO.font = "12px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+  const margemEsquerda = Math.ceil(d3.max(linhas, (l) => MEDIR_MARCO.measureText(l.rotulo).width) ?? 60) + 14;
+  const segmentos = [];
+  for (const l of linhas) {
+    let acima = 0;
+    for (const k of camadas) {
+      const v = l.valores[k.chave] ?? 0;
+      if (!v) continue;
+      const x1 = (100 * acima) / l.total;
+      acima += v;
+      segmentos.push({ rotulo: l.rotulo, x1, x2: (100 * acima) / l.total, k: k.nome,
+                       titulo: `${l.nome}: ${k.nome.toLowerCase()}, ${fmt(v)} de ${fmt(l.total)} (${porcentoInteiro(v / l.total)})` });
+    }
+  }
+  const svg = Plot.plot({
+    width: largura, height: linhas.length * 30 + 34, marginLeft: margemEsquerda, marginRight: 48, marginTop: 4, marginBottom: 26,
+    style: { fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", fontSize: "12px",
+             background: "transparent", color: c.tinta3, overflow: "visible" },
+    x: { domain: [0, 100] },
+    y: { domain: linhas.map((l) => l.rotulo), padding: 0.22 },
+    color: { domain: camadas.map((k) => k.nome), range: camadas.map((k) => c.v(k.cor)) },
+    marks: [
+      Plot.axisX({ ticks: [0, 25, 50, 75, 100], tickFormat: (v) => `${v}%`, tickSize: 0, tickPadding: 6, fill: c.tinta3, label: null }),
+      Plot.axisY({ tickSize: 0, tickPadding: 8, fill: c.tinta2, label: null }),
+      Plot.barX(segmentos, { x1: "x1", x2: "x2", y: "rotulo", fill: "k", stroke: c.superficie, strokeWidth: 1, title: "titulo" }),
+      Plot.text(linhas, { x: () => 100, y: "rotulo", text: opcoes.direita, dx: 6, textAnchor: "start", fill: c.tinta, fontWeight: 600 }),
+    ],
+  });
+  descrever(svg, opcoes.descricao);
+  alvo.replaceChildren(svg);
+}
+
+const PRIMEIRO_ANO_PRAZOS = 2015;
+const ANOS_DESFECHO = [
+  ["2013-2024", "2013 a 2024 (legislaturas encerradas)", 2013, 2024],
+  ["2013-2016", "2013 a 2016", 2013, 2016],
+  ["2017-2020", "2017 a 2020", 2017, 2020],
+  ["2021-2024", "2021 a 2024", 2021, 2024],
+  ["2025-", "2025 em diante", 2025, 9999],
+];
+const MINIMO_PARTIDO = 30;  // projetos para um partido entrar no gráfico
+
+function renderDesfechosPorGrupo(l, cartao, porPartido) {
+  const seletor = document.getElementById("f-anos-desfecho");
+  if (!seletor.options.length) {
+    for (const [v, t] of ANOS_DESFECHO) seletor.append(new Option(t, v));
+    seletor.addEventListener("change", () => render());
+  }
+  const [, textoAnos, de, ate] = ANOS_DESFECHO.find(([v]) => v === seletor.value) ?? ANOS_DESFECHO[0];
+  const indices = l.anos.map((a, i) => (a >= de && a <= ate ? i : -1)).filter((i) => i >= 0);
+  const fonte = porPartido ? l.desfechos_partido : l.desfechos_autoria;
+  let linhas = Object.entries(fonte).map(([nome, serie]) => {
+    const valores = Object.fromEntries(DESFECHOS.map((k) => [k.chave, d3.sum(indices, (i) => serie[k.chave][i])]));
+    return { nome, valores, total: d3.sum(DESFECHOS, (k) => valores[k.chave]) };
+  }).filter((x) => x.total >= (porPartido ? MINIMO_PARTIDO : 1));
+  if (porPartido) linhas.sort((a, b) => b.valores.lei / b.total - a.valores.lei / a.total || b.total - a.total);
+  for (const x of linhas) x.rotulo = `${x.nome} · ${fmt(x.total)}`;
+  const anos = textoAnos.replace(/ \(.*\)$/, "");
+  cartao.querySelector(".sub").textContent = porPartido
+    ? `Projetos apresentados por vereadores de ${anos}, pelo partido do primeiro autor na data da leitura e pelo desfecho. ` +
+      `Em ordem da parte que virou lei; só partidos com pelo menos ${MINIMO_PARTIDO} projetos.`
+    : `Projetos apresentados de ${anos}, pelo primeiro autor e pelo desfecho. O Executivo é o prefeito.`;
+  legenda(cartao, DESFECHOS);
+  acoesTabela(cartao, [{ nome: porPartido ? "partido" : "autoria" }, { nome: "projetos" }, ...DESFECHOS.map((k) => ({ nome: k.nome.toLowerCase() }))],
+              linhas.map((x) => [x.nome, x.total, ...DESFECHOS.map((k) => x.valores[k.chave])]),
+              `desfecho-por-${porPartido ? "partido" : "autoria"}-${seletor.value}.csv`, { recentesPrimeiro: false });
+  if (cartao.dataset.tabela === "1") return;
+  if (!linhas.length) {
+    cartao.querySelector(".grafico").replaceChildren(el("p", "vazio", "Nenhum projeto neste recorte."));
+    return;
+  }
+  graficoBarrasGrupos(cartao.querySelector(".grafico"), linhas, DESFECHOS, {
+    direita: (x) => porcentoInteiro(x.valores.lei / x.total),
+    descricao: `Parte dos projetos de ${anos} que virou lei, ${porPartido ? "por partido do primeiro autor" : "por autoria"}: ` +
+      linhas.map((x) => `${x.nome} ${porcentoInteiro(x.valores.lei / x.total)}`).join(", ") + "." });
+}
+
 function renderDesfechos(l) {
   const cartao = document.getElementById("c-desfechos");
+  const modo = ["ano", "autoria", "partido"].includes(cartao.dataset.modo) ? cartao.dataset.modo : "ano";
+  for (const b of cartao.querySelectorAll(".alternador button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.modo === modo));
+    b.onclick = () => { cartao.dataset.modo = b.dataset.modo; render(); };
+  }
+  cartao.querySelector(".anos-desfecho").hidden = modo === "ano";
+  cartao.querySelector(".nota-ano").hidden = modo !== "ano";
+  cartao.querySelector(".nota-grupo").hidden = modo === "ano";
+  if (modo !== "ano") return renderDesfechosPorGrupo(l, cartao, modo === "partido");
+  cartao.querySelector(".sub").textContent = "Projetos (PL, PDL, PR e PLO) apresentados em cada ano, pelo desfecho registrado no SPLEGIS. Os filtros de comissão, de matérias e de período não se aplicam.";
   const series = { ...l.desfechos, aberto: l.em_tramitacao };
   const indices = l.anos.map((_, i) => i).filter((i) => l.apresentados[i] != null);
   const anos = indices.map((i) => l.anos[i]);
@@ -1964,17 +2218,19 @@ function renderDesfechos(l) {
 }
 
 function renderLegislativo(l, t, nomes, ultimoDia) {
-  const cartoes = ["c-pareceres", "c-relatores", "c-desfechos", "c-presidentes", "c-assuntos", "c-saidas"]
+  const cartoes = ["c-pareceres", "c-relatores", "c-desfechos", "c-presidentes", "c-assuntos", "c-prazos", "c-membros", "c-saidas"]
     .map((id) => document.getElementById(id));
   for (const cartao of cartoes) cartao.querySelector(".erro-fluxos")?.remove();
   if (!(t instanceof Error) && t) renderSaidas(t, nomes);
   if (l instanceof Error || !l) {
-    for (const cartao of cartoes.slice(0, 5)) cartao.append(el("p", "vazio erro-fluxos", `Erro ao carregar os dados: ${l?.message ?? ""}`));
+    for (const cartao of cartoes.slice(0, -1)) cartao.append(el("p", "vazio erro-fluxos", `Erro ao carregar os dados: ${l?.message ?? ""}`));
     return;
   }
   renderPareceres(l, nomes, ultimoDia);
+  renderPrazos(l);
   renderRelatores(l);
   renderPresidentes(l);
+  renderMembros(l, ultimoDia);
   renderAssuntos(l);
   renderDesfechos(l);
 }

@@ -326,7 +326,12 @@
           <h2>Quanto tempo as matérias ficam na comissão</h2>
           <p class="sub" id="sub-permanencia"></p>
         </div>
-        <div class="acoes"></div>
+        <div class="controles">
+          <div class="alternador" role="group" aria-label="Comparar">
+            <button type="button" data-modo="comissao">Por comissão</button><button type="button" data-modo="autoria">Por autoria</button>
+          </div>
+          <div class="acoes"></div>
+        </div>
       </div>
       <ul class="legenda"></ul>
       <div class="grafico" tabindex="0"></div>
@@ -418,6 +423,23 @@
       <div class="grafico" tabindex="0"></div>
       <p class="nota-grafico">Fonte: webservice do SPLEGIS, com o relator, a data e a conclusão de cada parecer dos projetos apresentados desde 2013. "Outras conclusões" reúne redação final, redação do vencido, pareceres sobre emendas e sobre vetos.</p>
     </figure>
+    <figure class="cartao" id="c-prazos" data-curto="Prazo do parecer">
+      <div class="cartao-topo">
+        <div>
+          <h2>Quanto demora o parecer</h2>
+          <p class="sub" id="sub-prazos"></p>
+        </div>
+        <div class="controles">
+          <div class="alternador" role="group" aria-label="Comparar">
+            <button type="button" data-modo="comissao">Por comissão</button><button type="button" data-modo="autoria">Por autoria</button>
+          </div>
+          <div class="acoes"></div>
+        </div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico">O prazo de cada comissão conta do despacho que mandou o projeto às comissões ou, se outra comissão do mesmo despacho deu parecer antes, do último desses pareceres, já que as comissões opinam uma depois da outra. Só entram os projetos que receberam parecer; redação final, emendas e vetos ficam de fora. No primeiro ano de cada legislatura (2017, 2021 e 2025) o prazo cai: os projetos antigos foram arquivados, e quase todos os pareceres são de projetos novos. Pela mesma razão, a série começa em 2015: nos primeiros anos, só há pareceres de projetos apresentados desde 2013. O último ano conta só os pareceres dados até agora. O filtro de período não se aplica.</p>
+    </figure>
     <figure class="cartao" id="c-relatores" data-curto="Relatores">
       <div class="cartao-topo">
         <div>
@@ -445,17 +467,36 @@
       <div class="grafico" tabindex="0"></div>
       <p class="nota-grafico">O presidente designa os relatores e organiza a pauta das reuniões. Os partidos são os da data em que o mandato na presidência começou, pelas filiações registradas no cadastro de vereadores.</p>
     </figure>
+    <figure class="cartao" id="c-membros" data-curto="Partidos nas comissões">
+      <div class="cartao-topo">
+        <div>
+          <h2>Partidos nas comissões</h2>
+          <p class="sub" id="sub-membros"></p>
+        </div>
+        <div class="acoes"></div>
+      </div>
+      <ul class="legenda"></ul>
+      <div class="grafico" tabindex="0"></div>
+      <p class="nota-grafico">Pelo cadastro de cargos da Câmara (presidente, vice e membros), com o partido de cada vereador na data, pelas filiações. As cores ficam com os 7 partidos que mais ocuparam cadeiras desde nov/2018; os demais estão em "Outros partidos" e aparecem pelo nome ao passar o mouse. No começo de cada legislatura, as comissões ficam algumas semanas sem membros, até serem instaladas.</p>
+    </figure>
     <figure class="cartao" id="c-desfechos" data-curto="Desfecho">
       <div class="cartao-topo">
         <div>
           <h2>Como terminam os projetos</h2>
           <p class="sub">Projetos (PL, PDL, PR e PLO) apresentados em cada ano, pelo desfecho registrado no SPLEGIS. Os filtros de comissão, de matérias e de período não se aplicam.</p>
         </div>
-        <div class="acoes"></div>
+        <div class="controles">
+          <div class="alternador" role="group" aria-label="Agrupar por">
+            <button type="button" data-modo="ano">Por ano</button><button type="button" data-modo="autoria">Por autoria</button><button type="button" data-modo="partido">Por partido</button>
+          </div>
+          <label class="ano-calendario anos-desfecho" hidden>Apresentados de <select id="f-anos-desfecho"></select></label>
+          <div class="acoes"></div>
+        </div>
       </div>
       <ul class="legenda"></ul>
       <div class="grafico" tabindex="0"></div>
-      <p class="nota-grafico">Virou lei inclui os projetos promulgados com veto parcial. "Sem encerramento registrado" reúne os que ainda tramitam e os que, nos anos mais antigos, não têm o encerramento registrado no SPLEGIS; por isso, os anos recentes têm muito mais projetos nessa faixa.</p>
+      <p class="nota-grafico nota-ano">Virou lei inclui os projetos promulgados com veto parcial. "Sem encerramento registrado" reúne os que ainda tramitam e os que, nos anos mais antigos, não têm o encerramento registrado no SPLEGIS; por isso, os anos recentes têm muito mais projetos nessa faixa.</p>
+      <p class="nota-grafico nota-grupo" hidden>Virou lei inclui os projetos promulgados com veto parcial. Conta só o primeiro autor de cada projeto; os de coautoria entram no partido de quem assina primeiro. O número ao lado do nome é o de projetos; o da direita, a parte que virou lei. "Sem encerramento registrado" reúne os que ainda tramitam e os que, nos anos mais antigos, não têm o encerramento registrado no SPLEGIS. Passe o mouse sobre as barras para ver cada parte.</p>
     </figure>
     </div>
   </main>
@@ -470,7 +511,7 @@
         <li><strong>Indicadores.</strong> A idade conta dias completos desde o recebimento pela comissão (ou desde a entrada no estado atual), nas faixas de até 30, 31 a 90, 91 a 180, 181 a 365 e mais de 365 dias. Matérias enviadas e ainda não recebidas fazem parte do acervo, como no relatório.</li>
         <li><strong>Etapas.</strong> O último passo interno de cada matéria indica em que etapa ela está: sem relator, em estudo, em diligência, na pauta ou votada. Antes da coleta diária, é assim que se estima quantas estavam sem relator.</li>
         <li><strong>Composição.</strong> A legislatura de apresentação sai do ano no número da matéria (o PL 502/2026 é da legislatura 2025–2028). A autoria é a do primeiro autor; os prefeitos são reconhecidos pelo código de autor no SPLEGIS, diferente do que a mesma pessoa tinha como vereador.</li>
-        <li><strong>Relatores e desfechos.</strong> O relator, o parecer e a conclusão de cada projeto em cada comissão, como o projeto terminou (lei, veto, retirada, arquivamento), os assuntos de cada projeto, os presidentes das comissões e as filiações partidárias dos vereadores vêm do webservice do SPLEGIS, coletados uma vez por dia.</li>
+        <li><strong>Relatores e desfechos.</strong> O relator, o parecer e a conclusão de cada projeto em cada comissão, como o projeto terminou (lei, veto, retirada, arquivamento), os autores e os assuntos de cada projeto, os presidentes e membros das comissões e as filiações partidárias dos vereadores vêm do webservice do SPLEGIS, coletados uma vez por dia.</li>
         <li><strong>Votações e tempos.</strong> A votação de uma matéria numa comissão é o primeiro passo interno de matéria votada, ou a saída aprovada em reunião conjunta. O tempo de cada etapa vai de um passo ao primeiro passo da etapa seguinte. Desde o início da coleta diária, os passos internos também vêm do feed do SPLEGIS.</li>
         <li><strong>Entradas e saídas.</strong> Cada passagem de uma matéria por uma comissão vai do envio a ela até o envio para outra área, com a origem e o destino. Desde o início da coleta diária, a hora e o destino de cada saída vêm das tramitações que o SPLEGIS registra no dia.</li>
         <li><strong>Série histórica.</strong> Cada retrato fica guardado. O período de novembro de 2018 a outubro de 2026 foi reconstruído a partir dos eventos de tramitação que o SPLEGIS registra dia a dia e conferido contra o histórico oficial das matérias (<a href="https://github.com/prototiposlegisla/comissoes-acervo/blob/main/dados/reconstrucao/README.md">método e validação</a>).</li>
