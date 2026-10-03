@@ -507,10 +507,29 @@
         <div class="controles">
           <label class="ano-calendario">Apresentados de <select id="f-anos-funil"></select></label>
           <label class="ano-calendario">Autoria <select id="f-autoria-funil"></select></label>
+          <label class="ano-calendario">Assunto <select id="f-assunto-funil"></select></label>
         </div>
       </div>
+      <ul class="legenda"></ul>
       <ol class="funil"></ol>
-      <p class="nota-grafico">As etapas são encaixadas: o projeto que chegou a uma conta também em todas as anteriores. Ganhar relator e receber parecer valem para qualquer comissão; passar por todas as comissões é ter o parecer de cada uma das que constam no primeiro despacho. Aprovados pela Câmara são os que viraram lei e os vetados por inteiro pelo prefeito. Alguns poucos projetos são aprovados sem o parecer de todas as comissões (o parecer é dado em plenário, quando o prazo das comissões vence); eles contam como se tivessem passado por elas. Nos anos recentes, muitos projetos ainda tramitam e podem avançar.</p>
+      <p class="nota-grafico">As etapas são encaixadas: o projeto que chegou a uma conta também em todas as anteriores. Ganhar relator e receber parecer valem para qualquer comissão; passar por todas as comissões é ter o parecer de cada uma das que constam no primeiro despacho. Aprovados pela Câmara são os que viraram lei e os vetados por inteiro pelo prefeito. Alguns poucos projetos são aprovados sem o parecer de todas as comissões (o parecer é dado em plenário, quando o prazo das comissões vence); eles contam como se tivessem passado por elas. Homenagens são os projetos com assunto de denominação (de ruas, praças e próprios), data comemorativa, evento do calendário oficial, título ou outra honraria. Nos anos recentes, muitos projetos ainda tramitam e podem avançar.</p>
+      <div class="rodape-cartao"><div class="acoes acoes-csv"></div></div>
+    </figure>
+    <figure class="cartao" id="c-passagem" data-curto="Gargalos">
+      <div class="cartao-topo">
+        <div>
+          <h2>Onde cada grupo de projetos trava</h2>
+          <p class="sub" id="sub-passagem"></p>
+        </div>
+        <div class="controles">
+          <div class="alternador" role="group" aria-label="Comparar por">
+            <button type="button" data-modo="autoria">Autoria</button><button type="button" data-modo="assunto">Assunto</button><button type="button" data-modo="tipo">Tipo</button><button type="button" data-modo="comissao">Comissão</button><button type="button" data-modo="partido">Partido</button>
+          </div>
+          <label class="ano-calendario">Apresentados de <select id="f-anos-passagem"></select></label>
+        </div>
+      </div>
+      <div class="matriz-caixa"></div>
+      <p class="nota-grafico">As passagens são as do funil acima: de apresentado a ganhar relator, daí a receber parecer, a passar por todas as comissões do despacho, a ser aprovado pela Câmara e a virar lei; virar lei, aqui, é não ser vetado por inteiro pelo prefeito. Quanto mais escura a célula, mais projetos passaram. O gargalo só é marcado em passagens com pelo menos 10 projetos. Homenagens: denominações, datas comemorativas, eventos do calendário oficial, títulos e outras honrarias. Partido: o do primeiro autor na data da leitura.</p>
       <div class="rodape-cartao"><div class="acoes acoes-csv"></div></div>
     </figure>
     </div>

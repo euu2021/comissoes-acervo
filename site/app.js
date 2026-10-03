@@ -2192,7 +2192,8 @@ function renderDesfechosPorGrupo(l, cartao, porPartido) {
       linhas.map((x) => `${x.nome} ${porcentoInteiro(x.valores.lei / x.total)}`).join(", ") + "." });
 }
 
-// Funil: até onde chegaram os projetos apresentados nos anos escolhidos (painel/legislativo.py).
+// Funil: até onde chegou cada projeto apresentado nos anos escolhidos (painel/legislativo.py), com o
+// que aconteceu aos que pararam em cada etapa; e a matriz de passagem, que compara grupos.
 const ETAPAS_FUNIL = {
   apresentados: "Apresentados",
   relator: "Ganharam relator em alguma comissão",
@@ -2201,47 +2202,198 @@ const ETAPAS_FUNIL = {
   aprovados: "Aprovados pela Câmara",
   lei: "Viraram lei",
 };
+const PASSAGENS_FUNIL = { relator: "Ganhou relator", parecer: "Recebeu parecer", comissoes: "Passou pelas comissões",
+                          aprovados: "Aprovado pela Câmara", lei: "Virou lei" };
 const AUTORIAS_FUNIL = [["", "Todas"], ["Vereadores", "Vereadores"], ["Executivo", "Executivo (prefeito)"], ["Mesa Diretora", "Mesa Diretora"]];
+const ASSUNTOS_FUNIL = [["", "Todos"], ["demais", "Sem homenagens"], ["homenagem", "Só homenagens"]];
+const SEGUIU = { chave: "seguiu", nome: "Seguiram adiante", cor: "--s1" };
+const PLURAL_PARADOS = { vetado: "vetados", rejeitado: "rejeitados ou ilegais", retirado: "retirados pelo autor",
+  apensado: "apensados a outro", legislatura: "arquivados no fim da legislatura", outros: "com outro encerramento",
+  aberto: "ainda em tramitação ou sem encerramento" };
+const PARADOS = DESFECHOS.filter((k) => k.chave !== "lei")
+  .map((k) => ({ ...k, plural: PLURAL_PARADOS[k.chave], ...(k.chave === "aberto" ? { nome: "Ainda em tramitação ou sem encerramento" } : {}) }));
+const MINIMO_GRUPO = 30;  // projetos para um grupo entrar na matriz
+
+function preencherSeletor(sel, opcoes, valor) {
+  if (sel.options.length) return;
+  for (const [v, t] of opcoes) sel.append(new Option(t, v));
+  sel.value = valor;
+  sel.addEventListener("change", () => render());
+}
+
+function anosEscolhidos(sel) {
+  preencherSeletor(sel, ANOS_DESFECHO.map(([v, t]) => [v, t]), "2021-2024");  // a última legislatura encerrada
+  const [, texto, de, ate] = ANOS_DESFECHO.find(([v]) => v === sel.value) ?? ANOS_DESFECHO[0];
+  return { de, ate, texto: texto.replace(/ \(.*\)$/, "") };
+}
+
+// Quantos projetos (dos índices dados) chegaram a cada etapa e, dos que pararam em cada uma, por quê.
+function contarFunil(fn, indices) {
+  const n = fn.etapas.map(() => 0);
+  const parados = fn.etapas.map(() => Object.fromEntries(PARADOS.map((k) => [k.chave, 0])));
+  for (const i of indices) {
+    const e = fn.etapa[i];
+    for (let k = 0; k <= e; k++) n[k]++;
+    if (e < fn.etapas.length - 1) {
+      const d = fn.desfechos[fn.desfecho[i]];
+      parados[e][d in parados[e] ? d : "outros"]++;
+    }
+  }
+  return { n, parados };
+}
 
 function renderFunil(l) {
+  const fn = l.funil;
   const cartao = document.getElementById("c-funil");
-  const anosSel = document.getElementById("f-anos-funil");
+  const anos = anosEscolhidos(document.getElementById("f-anos-funil"));
   const autoriaSel = document.getElementById("f-autoria-funil");
-  if (!anosSel.options.length) {
-    for (const [v, t] of ANOS_DESFECHO) anosSel.append(new Option(t, v));
-    anosSel.value = "2021-2024";  // a última legislatura encerrada
-    for (const [v, t] of AUTORIAS_FUNIL) autoriaSel.append(new Option(t, v));
-    anosSel.addEventListener("change", () => render());
-    autoriaSel.addEventListener("change", () => render());
-  }
-  const [, textoAnos, de, ate] = ANOS_DESFECHO.find(([v]) => v === anosSel.value) ?? ANOS_DESFECHO[0];
-  const anos = textoAnos.replace(/ \(.*\)$/, "");
-  const grupos = autoriaSel.value ? [autoriaSel.value] : Object.keys(l.funil.por_autoria);
-  const n = l.funil.etapas.map((_, k) => d3.sum(grupos, (a) => d3.sum(l.anos, (ano, i) =>
-    (ano >= de && ano <= ate ? l.funil.por_autoria[a][i][k] : 0))));
-  const quem = autoriaSel.value === "Executivo" ? "do Executivo" : autoriaSel.value === "Mesa Diretora" ? "da Mesa Diretora"
-    : autoriaSel.value === "Vereadores" ? "de vereadores" : "";
+  const assuntoSel = document.getElementById("f-assunto-funil");
+  preencherSeletor(autoriaSel, AUTORIAS_FUNIL, "");
+  preencherSeletor(assuntoSel, ASSUNTOS_FUNIL, "");
+  const autoria = autoriaSel.value ? fn.autorias.indexOf(autoriaSel.value) : -1;
+  const homenagem = assuntoSel.value === "homenagem" ? 1 : assuntoSel.value === "demais" ? 0 : -1;
+  const indices = fn.ano.map((_, i) => i).filter((i) => fn.ano[i] >= anos.de && fn.ano[i] <= anos.ate
+    && (autoria < 0 || fn.autoria[i] === autoria) && (homenagem < 0 || fn.homenagem[i] === homenagem));
+  const { n, parados } = contarFunil(fn, indices);
+  const quem = { Executivo: "do Executivo", "Mesa Diretora": "da Mesa Diretora", Vereadores: "de vereadores" }[autoriaSel.value];
+  const quais = homenagem === 1 ? ", só homenagens," : homenagem === 0 ? ", sem as homenagens," : "";
   document.getElementById("sub-funil").textContent =
-    `Projetos (PL, PDL, PR e PLO) ${quem ? `${quem} ` : ""}apresentados de ${anos} e até onde chegaram. ` +
-    `Viraram lei ${porcentoInteiro(n[n.length - 1] / (n[0] || 1))}. Os filtros de comissão, de matérias e de período não se aplicam.`;
+    `Projetos (PL, PDL, PR e PLO) ${quem ? `${quem} ` : ""}apresentados de ${anos.texto}${quais} e até onde chegaram. ` +
+    `Viraram lei ${porcentoInteiro(n[n.length - 1] / (n[0] || 1))}. A parte colorida de cada barra mostra o que aconteceu ` +
+    "com os que pararam ali. Os filtros de comissão, de matérias e de período não se aplicam.";
+  legenda(cartao, [SEGUIU, ...PARADOS]);
+  const c = cores();
   const lista = cartao.querySelector(".funil");
-  lista.replaceChildren(...l.funil.etapas.map((etapa, k) => {
+  lista.replaceChildren(...fn.etapas.map((etapa, k) => {
     const li = el("li");
     const nome = el("span", "nome", ETAPAS_FUNIL[etapa]);
     if (k > 0) nome.append(" ", el("small", null, `${porcentoInteiro(n[k] / (n[k - 1] || 1))} da etapa anterior`));
     const trilho = el("span", "trilho");
-    const barra = el("span", "barra");
-    barra.style.width = `${(100 * n[k]) / (n[0] || 1)}%`;
-    trilho.append(barra);
+    const pilha = el("span", "pilha");
+    pilha.style.width = `${(100 * n[k]) / (n[0] || 1)}%`;
+    const ultimo = k === fn.etapas.length - 1;
+    const partes = [{ ...SEGUIU, v: ultimo ? n[k] : n[k + 1] },
+                    ...(ultimo ? [] : PARADOS.map((x) => ({ ...x, v: parados[k][x.chave] })))].filter((x) => x.v);
+    for (const x of partes) {
+      const seg = el("span", "seg");
+      seg.style.flex = `${x.v} 1 0`;
+      seg.style.background = c.v(x.cor);
+      seg.title = x.chave === "seguiu"
+        ? `${ultimo ? "Viraram lei" : "Seguiram para a etapa seguinte"}: ${fmt(x.v)} (${porcentoInteiro(x.v / (n[k] || 1))})`
+        : `Pararam aqui, ${x.plural}: ${fmt(x.v)} (${porcentoInteiro(x.v / (n[k] || 1))} dos que chegaram a esta etapa)`;
+      pilha.append(seg);
+    }
+    trilho.append(pilha);
     li.append(nome, el("span", "valor", `${fmt(n[k])}${k ? ` · ${porcentoInteiro(n[k] / (n[0] || 1))}` : ""}`), trilho);
-    li.title = `${ETAPAS_FUNIL[etapa]}: ${fmt(n[k])} projetos, ${porcentoInteiro(n[k] / (n[0] || 1))} dos apresentados`;
+    if (!ultimo && n[k] - n[k + 1] > 0) {
+      const perda = n[k] - n[k + 1];
+      const motivos = PARADOS.map((x) => ({ ...x, v: parados[k][x.chave] })).filter((x) => x.v).sort((a, b) => b.v - a.v).slice(0, 2);
+      li.append(el("span", "perda", `Pararam aqui ${fmt(perda)} (${porcentoInteiro(perda / n[k])}): ` +
+        motivos.map((x) => `${porcentoInteiro(x.v / perda)} ${x.plural}`).join("; ") + "."));
+    }
     return li;
   }));
   const botao = botaoAcao("Baixar CSV", "baixar");
-  botao.addEventListener("click", () => baixarTabela(["etapa", "projetos", "% dos apresentados", "% da etapa anterior"],
-    l.funil.etapas.map((etapa, k) => [ETAPAS_FUNIL[etapa], n[k], Math.round((1000 * n[k]) / (n[0] || 1)) / 10,
-                                      k ? Math.round((1000 * n[k]) / (n[k - 1] || 1)) / 10 : null]),
-    `funil-${anosSel.value}-${(autoriaSel.value || "todas").toLowerCase().replace(" ", "-")}.csv`));
+  botao.addEventListener("click", () => baixarTabela(
+    ["etapa", "projetos", "% dos apresentados", "% da etapa anterior", ...PARADOS.map((x) => `pararam: ${x.nome.toLowerCase()}`)],
+    fn.etapas.map((etapa, k) => [ETAPAS_FUNIL[etapa], n[k], Math.round((1000 * n[k]) / (n[0] || 1)) / 10,
+      k ? Math.round((1000 * n[k]) / (n[k - 1] || 1)) / 10 : null,
+      ...PARADOS.map((x) => (k < fn.etapas.length - 1 ? parados[k][x.chave] : null))]),
+    `funil-${document.getElementById("f-anos-funil").value}-${(autoriaSel.value || "todas").toLowerCase().replace(" ", "-")}` +
+    `${assuntoSel.value ? `-${assuntoSel.value}` : ""}.csv`));
+  cartao.querySelector(".acoes-csv").replaceChildren(botao);
+}
+
+// Grupos da matriz de passagem: nome do grupo e o teste de cada projeto (um projeto pode estar em vários).
+const GRUPOS_PASSAGEM = {
+  autoria: { nome: "autoria", grupos: (fn) => ["Vereadores", "Executivo", "Mesa Diretora"].map((a) => {
+    const k = fn.autorias.indexOf(a);
+    return { nome: a, teste: (i) => fn.autoria[i] === k };
+  }) },
+  assunto: { nome: "assunto", grupos: (fn) => [
+    { nome: "Homenagens", teste: (i) => fn.homenagem[i] === 1 },
+    { nome: "Demais projetos", teste: (i) => fn.homenagem[i] === 0 }] },
+  tipo: { nome: "tipo", grupos: (fn) => fn.tipos.map((t, k) => ({ nome: t, teste: (i) => fn.tipo[i] === k })) },
+  // O projeto só aparece numa comissão depois de ganhar relator nela: as duas primeiras passagens não se aplicam.
+  comissao: { nome: "comissão do despacho", ignorar: [0, 1], grupos: (fn) => fn.comissoes_nomes.map((s, k) => ({
+    nome: rotuloComissao(s), teste: (i) => (fn.comissoes[i] & (1 << k)) !== 0 })) },
+  partido: { nome: "partido do primeiro autor", grupos: (fn) => fn.partidos.map((p, k) => ({ nome: p, teste: (i) => fn.partido[i] === k })) },
+};
+
+function renderPassagem(l) {
+  const fn = l.funil;
+  const cartao = document.getElementById("c-passagem");
+  const modo = GRUPOS_PASSAGEM[cartao.dataset.modo] ? cartao.dataset.modo : "autoria";
+  for (const b of cartao.querySelectorAll(".alternador button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.modo === modo));
+    b.onclick = () => { cartao.dataset.modo = b.dataset.modo; render(); };
+  }
+  const anos = anosEscolhidos(document.getElementById("f-anos-passagem"));
+  const noPeriodo = fn.ano.map((_, i) => i).filter((i) => fn.ano[i] >= anos.de && fn.ano[i] <= anos.ate);
+  const etapas = fn.etapas.slice(1);
+  let linhas = GRUPOS_PASSAGEM[modo].grupos(fn).map((g) => ({ nome: g.nome, ...contarFunil(fn, noPeriodo.filter(g.teste)) }))
+    .filter((g) => g.n[0] >= (modo === "partido" ? MINIMO_GRUPO : 1));
+  if (modo === "partido") linhas.sort((a, b) => b.n[0] - a.n[0]);
+  for (const g of linhas) {
+    g.taxas = etapas.map((_, k) => (g.n[k] && !GRUPOS_PASSAGEM[modo].ignorar?.includes(k) ? g.n[k + 1] / g.n[k] : null));
+    const validas = g.taxas.map((t, k) => ({ t, k })).filter((x) => x.t != null && g.n[x.k] >= 10);
+    g.gargalo = validas.length ? validas.reduce((a, b) => (b.t < a.t ? b : a)).k : -1;
+  }
+  document.getElementById("sub-passagem").textContent =
+    `Projetos apresentados de ${anos.texto}, por ${GRUPOS_PASSAGEM[modo].nome}: de cada 100 que chegaram a uma etapa, quantos ` +
+    "passaram para a seguinte. A célula contornada é a passagem mais estreita de cada grupo, o seu gargalo." +
+    (modo === "partido" ? ` Só partidos com pelo menos ${MINIMO_GRUPO} projetos.` : "") +
+    (modo === "comissao" ? " Cada projeto conta em todas as comissões do primeiro despacho em que ganhou relator; " +
+      "por isso as duas primeiras passagens não se aplicam, e o grupo da CCJ é quase o total." : "");
+  const c = cores();
+  const rampa = d3.interpolateRgbBasis([d3.interpolateRgb(c.superficie, c.v("--idade-1"))(0.3),
+    ...["--idade-1", "--idade-2", "--idade-3", "--idade-4", "--idade-5"].map(c.v)]);
+  const tabela = el("table", "matriz matriz-passagem");
+  const cab = el("tr");
+  cab.append(el("th", null, `${GRUPOS_PASSAGEM[modo].nome} ↓`));
+  for (const e of etapas) {
+    const th = el("th", null, PASSAGENS_FUNIL[e]);
+    th.scope = "col";
+    cab.append(th);
+  }
+  for (const [texto, classe] of [["Do início ao fim", "total"], ["Projetos", "total"]]) {
+    const th = el("th", classe, texto);
+    th.scope = "col";
+    cab.append(th);
+  }
+  tabela.append(el("thead"), el("tbody"));
+  tabela.tHead.append(cab);
+  for (const g of linhas) {
+    const tr = el("tr");
+    const th = el("th", null, g.nome);
+    th.scope = "row";
+    tr.append(th);
+    g.taxas.forEach((t, k) => {
+      const td = el("td", t == null ? "vazia" : k === g.gargalo ? "gargalo" : null, t == null ? "—" : porcentoInteiro(t));
+      if (t == null && GRUPOS_PASSAGEM[modo].ignorar?.includes(k)) td.title = "Não se aplica: o projeto só aparece na comissão depois de ganhar relator nela.";
+      if (t != null) {
+        // A maioria das passagens fica acima de 50%: a rampa começa em 30% para separar melhor os valores.
+        const fundo = d3.color(rampa(Math.max(0, (t - 0.3) / 0.7)));
+        td.style.background = fundo.formatHex();
+        const { r, g: verde, b } = fundo.rgb();
+        td.style.color = 0.2126 * r + 0.7152 * verde + 0.0722 * b < 140 ? "#fff" : "#0b0b0b";
+        td.title = `${g.nome}: dos ${fmt(g.n[k])} que chegaram a "${ETAPAS_FUNIL[fn.etapas[k]].toLowerCase()}", ` +
+          `${fmt(g.n[k + 1])} chegaram a "${ETAPAS_FUNIL[fn.etapas[k + 1]].toLowerCase()}" (${porcentoInteiro(t)})` +
+          (k === g.gargalo ? ". É o gargalo deste grupo." : "");
+      }
+      tr.append(td);
+    });
+    tr.append(el("td", "total", porcentoInteiro(g.n[g.n.length - 1] / (g.n[0] || 1))), el("td", "total", fmt(g.n[0])));
+    tabela.tBodies[0].append(tr);
+  }
+  cartao.querySelector(".matriz-caixa").replaceChildren(linhas.length ? tabela : el("p", "vazio", "Nenhum projeto neste recorte."));
+  const botao = botaoAcao("Baixar CSV", "baixar");
+  botao.addEventListener("click", () => baixarTabela(
+    [GRUPOS_PASSAGEM[modo].nome, ...etapas.map((e) => `${PASSAGENS_FUNIL[e].toLowerCase()} (%)`), "do início ao fim (%)",
+     ...fn.etapas.map((e) => `${ETAPAS_FUNIL[e].toLowerCase()} (projetos)`)],
+    linhas.map((g) => [g.nome, ...g.taxas.map((t) => (t == null ? null : Math.round(t * 1000) / 10)),
+                       Math.round((1000 * g.n[g.n.length - 1]) / (g.n[0] || 1)) / 10, ...g.n]),
+    `passagem-por-${modo}-${document.getElementById("f-anos-passagem").value}.csv`));
   cartao.querySelector(".acoes-csv").replaceChildren(botao);
 }
 
@@ -2279,7 +2431,7 @@ function renderDesfechos(l) {
 }
 
 function renderLegislativo(l, t, nomes, ultimoDia) {
-  const cartoes = ["c-pareceres", "c-relatores", "c-desfechos", "c-presidentes", "c-assuntos", "c-prazos", "c-membros", "c-funil",
+  const cartoes = ["c-pareceres", "c-relatores", "c-desfechos", "c-presidentes", "c-assuntos", "c-prazos", "c-membros", "c-funil", "c-passagem",
                    "c-saidas"]
     .map((id) => document.getElementById(id));
   for (const cartao of cartoes) cartao.querySelector(".erro-fluxos")?.remove();
@@ -2296,6 +2448,7 @@ function renderLegislativo(l, t, nomes, ultimoDia) {
   renderAssuntos(l);
   renderDesfechos(l);
   renderFunil(l);
+  renderPassagem(l);
 }
 
 function renderTramitacao(t, nomes, ultimoDia) {

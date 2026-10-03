@@ -15,7 +15,7 @@ partir do que coletor/legislativo.py guarda do webservice do SPLEGIS:
   também pela autoria e pelo partido do primeiro autor;
 - prazos: quanto tempo cada comissão levou para dar o parecer, por ano e por autoria;
 - membros: quantos membros de cada partido cada comissão tinha, mês a mês;
-- funil: até onde chegaram os projetos apresentados em cada ano, por autoria.
+- funil: até onde chegou cada projeto apresentado desde 2013, com o que dá para recortá-lo.
 """
 from __future__ import annotations
 
@@ -199,39 +199,66 @@ def membros(cargos: list[dict], filiacoes: dict[str, list[tuple]], fim: str) -> 
 ETAPAS_FUNIL = ["apresentados", "relator", "parecer", "comissoes", "aprovados", "lei"]
 
 
-def funil(relatorias: list[dict], encerrados: list[dict], autoria: dict[str, tuple[str, str]], anos: list[int]) -> dict:
-    """Até que etapa chegou cada projeto: apresentado, com relator em alguma comissão, com algum
-    parecer, com o parecer de todas as comissões do primeiro despacho, aprovado pela Câmara (virou
-    lei ou teve veto total) e virou lei. As etapas são encaixadas: o projeto que chegou a uma conta
-    também em todas as anteriores (o aprovado sem parecer de alguma comissão, com parecer dado em
-    plenário, conta como se tivesse passado por elas)."""
+# Assuntos que marcam as homenagens: denominação de logradouros e próprios, datas e eventos do
+# calendário oficial, títulos e outras honrarias.
+HOMENAGENS = {"DENOMINACAO", "CONCESSAO HONORIFICA", "TITULO HONORIFICO", "CIDADAO PAULISTANO", "HOMENAGEM",
+              "DATA COMEMORATIVA", "CALENDARIO OFICIAL DE EVENTOS", "MEDALHA", "SALVA DE PRATA"}
+TIPOS_FUNIL = ["PL", "PDL", "PR", "PLO"]
+COMISSOES_FUNIL = ["CCJ", "FIN", "URB", "ADM", "ECON", "EDUC", "SAUDE"]
+
+
+def etapa_do_projeto(linhas: list[dict], fim: str | None) -> int:
+    """Até que etapa de ETAPAS_FUNIL o projeto chegou: apresentado (0), com relator em alguma
+    comissão, com algum parecer, com o parecer de todas as comissões do primeiro despacho,
+    aprovado pela Câmara (virou lei ou teve veto total) e virou lei (5). As etapas são
+    encaixadas: o aprovado sem parecer de alguma comissão (parecer dado em plenário) conta como
+    se tivesse passado por elas."""
+    despachos = [int(r["despacho"]) for r in linhas if r["despacho"].isdigit()]
+    primeiro = [r for r in linhas if despachos and r["despacho"] == str(min(despachos))]
+    if fim == "lei":
+        return 5
+    if fim == "vetado":
+        return 4
+    if primeiro and all(r["parecer_em"] for r in primeiro):
+        return 3
+    if any(r["parecer_em"] and conclusao(r["conclusao"]) != "outros" for r in linhas):
+        return 2
+    return 1 if linhas else 0
+
+
+def funil(relatorias: list[dict], encerrados: list[dict], autoria: dict[str, tuple[str, str]],
+          assuntos: list[dict], anos: list[int]) -> dict:
+    """Um registro por projeto apresentado nos `anos`, em colunas, para o funil do painel: ano,
+    tipo, autoria, partido do primeiro autor, se é homenagem, as comissões do primeiro despacho
+    (bits na ordem de COMISSOES_FUNIL), a etapa a que chegou e o desfecho."""
     por_projeto: dict[str, list[dict]] = defaultdict(list)
     for r in relatorias:
         por_projeto[r["rotulo"]].append(r)
     fim = {e["rotulo"]: desfecho(e["motivo"]) for e in encerrados}
-    contagem = {a: [[0] * len(ETAPAS_FUNIL) for _ in anos] for a in AUTORIAS}
-    for rotulo, (classe, _) in autoria.items():
-        ano = int(rotulo.rsplit("/", 1)[1])
-        if ano not in anos:
+    temas = {a["rotulo"]: set(a["assuntos"].split(" | ")) for a in assuntos}
+    desfechos = [*DESFECHOS, "aberto"]
+    partidos: dict[str, int] = {}
+    col = {k: [] for k in ("ano", "tipo", "autoria", "partido", "homenagem", "comissoes", "etapa", "desfecho")}
+    for rotulo, (classe, partido) in sorted(autoria.items()):
+        tipo, ano = rotulo.split()[0], int(rotulo.rsplit("/", 1)[1])
+        if ano not in anos or tipo not in TIPOS_FUNIL:
             continue
         linhas = por_projeto.get(rotulo, [])
         despachos = [int(r["despacho"]) for r in linhas if r["despacho"].isdigit()]
-        primeiro = [r for r in linhas if despachos and r["despacho"] == str(min(despachos))]
-        etapa = 0
-        if linhas:
-            etapa = 1
-        if any(r["parecer_em"] and conclusao(r["conclusao"]) != "outros" for r in linhas):
-            etapa = 2
-        if primeiro and all(r["parecer_em"] for r in primeiro):
-            etapa = 3
-        if fim.get(rotulo) in ("lei", "vetado"):
-            etapa = 4
-        if fim.get(rotulo) == "lei":
-            etapa = 5
-        linha = contagem[classe][anos.index(ano)]
-        for k in range(etapa + 1):
-            linha[k] += 1
-    return {"etapas": ETAPAS_FUNIL, "por_autoria": contagem}  # por autoria: [projetos em cada etapa] por ano
+        bits = 0
+        for r in linhas:
+            if despachos and r["despacho"] == str(min(despachos)) and r["comissao"] in COMISSOES_FUNIL:
+                bits |= 1 << COMISSOES_FUNIL.index(r["comissao"])
+        col["ano"].append(ano)
+        col["tipo"].append(TIPOS_FUNIL.index(tipo))
+        col["autoria"].append(AUTORIAS.index(classe))
+        col["partido"].append(partidos.setdefault(partido, len(partidos)) if partido else -1)
+        col["homenagem"].append(int(bool(temas.get(rotulo, set()) & HOMENAGENS)))
+        col["comissoes"].append(bits)
+        col["etapa"].append(etapa_do_projeto(linhas, fim.get(rotulo)))
+        col["desfecho"].append(desfechos.index(fim.get(rotulo, "aberto")))
+    return {"etapas": ETAPAS_FUNIL, "tipos": TIPOS_FUNIL, "autorias": AUTORIAS, "partidos": list(partidos),
+            "comissoes_nomes": COMISSOES_FUNIL, "desfechos": desfechos, **col}
 
 
 def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict], fim: str,
@@ -349,5 +376,5 @@ def montar(relatorias: list[dict], encerrados: list[dict], contagem: list[dict],
         "desfechos_partido": dict(sorted(por_partido.items())),
         "prazos": prazos(relatorias, autoria, anos),
         "membros": membros(cargos, por_vereador, fim),
-        "funil": funil(relatorias, encerrados, autoria, anos),
+        "funil": funil(relatorias, encerrados, autoria, assuntos, anos),
     }

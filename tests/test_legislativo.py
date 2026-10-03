@@ -116,10 +116,16 @@ class TestLegislativo(unittest.TestCase):
                {**base, "rotulo": "PL 1/2022", "comissao": "FIN", "parecer_em": "", "conclusao": ""},
                {**base, "rotulo": "PL 2/2022", "comissao": "CCJ", "parecer_em": "", "conclusao": ""}]
         enc = encerrados([{"tipo": "PL", "numero": 3, "ano": 2022, "leitura": "", "encerramento": "",
-                           "motivo": "Encerrado-PROMULGADO"}])
-        f = funil(rel, enc, autoria, [2022])
-        self.assertEqual(f["por_autoria"]["Vereadores"], [[3, 2, 1, 0, 0, 0]])
-        self.assertEqual(f["por_autoria"]["Executivo"], [[1, 1, 1, 1, 1, 1]])  # aprovado sem passar: conta em tudo
+                           "motivo": "Encerrado-PROMULGADO"},
+                          {"tipo": "PL", "numero": 4, "ano": 2022, "leitura": "", "encerramento": "",
+                           "motivo": "Encerrado-RETIRADO PELO AUTOR"}])
+        ass = [{"rotulo": "PL 4/2022", "assuntos": "DENOMINACAO | LOGRADOURO PUBLICO"}]
+        f = funil(rel, enc, autoria, ass, [2022])
+        self.assertEqual(f["etapa"], [2, 1, 5, 0])  # aprovado sem passar pelas comissões: conta em tudo
+        self.assertEqual(f["comissoes"][0], 0b11)  # CCJ e FIN
+        self.assertEqual(f["homenagem"], [0, 0, 0, 1])
+        self.assertEqual([f["desfechos"][d] for d in f["desfecho"]], ["aberto", "aberto", "lei", "retirado"])
+        self.assertEqual([f["partidos"][p] if p >= 0 else "" for p in f["partido"]], ["PT", "PT", "", "PL"])
 
 
 if __name__ == "__main__":
